@@ -1,27 +1,30 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Community Guesser</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Community Episode Guesser</title>
+  <meta name="description" content="Guess the Community episode from a single frame.">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="page">
-    <header class="site-header"><h1>Community Guesser</h1></header>
     <main class="game">
-      <div class="screen"><div class="placeholder">TEST</div></div>
-      <form id="guess-form" autocomplete="off">
+      <header><h1>Community Episode Guesser</h1></header>
+      <div class="placeholder" role="img" aria-label="Test image placeholder"><span>TEST</span></div>
+      <section class="guess-area" aria-label="Episode guessing">
         <div class="search-wrap">
-          <input id="episode-input" type="text" aria-label="Guess the episode" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false" placeholder="Guess the episode..." spellcheck="false">
+          <input id="episode-input" type="text" placeholder="Guess the episode..." autocomplete="off" aria-label="Guess the episode" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false" role="combobox">
           <div id="suggestions" class="suggestions" role="listbox" hidden></div>
         </div>
-        <button class="guess-button" type="submit">Guess</button>
-      </form>
-      <div class="scores"><div>Score: <span id="score">0</span></div><div>High Score: <span id="high-score">0</span></div></div>
-      <p id="feedback" class="feedback" aria-live="polite"></p>
+        <button type="button" id="guess-btn" class="guess">Guess</button>
+        <div class="score">Score: <span id="score">0</span><br>High Score: <span id="high-score">0</span></div>
+        <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+      </section>
     </main>
     <footer><a href="impressum/">Impressum</a></footer>
   </div>
-  <script src="js/episodes.js"></script><script src="js/game.js"></script>
+  <script src="js/episodes.js"></script>
+  <script src="js/game.js"></script>
 </body>
 </html>
