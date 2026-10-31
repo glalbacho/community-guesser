@@ -22,3 +22,15 @@ footer{max-width:900px;width:100%;margin:60px auto 0;padding-top:24px;border-top
 footer a{color:#999ba3;text-decoration:none;font-size:14px}
 footer a:hover{text-decoration:underline}
 @media(max-width:600px){.page{padding:18px 12px}.site-header h1{font-size:21px}.game{padding-top:26px}.scores{font-size:19px}}
+
+/* German legal notice */
+.page:has(.card) main{width:100%;max-width:900px;margin:0 auto}
+.page:has(.card) h1{font-size:42px;margin:60px 0 20px;letter-spacing:-.5px}
+.page:has(.card) p{font-size:18px;line-height:1.6}
+.page:has(.card) .card{background:#24272e;padding:24px;border:1px solid #343943;border-radius:14px;box-shadow:0 10px 30px #0006}
+.page:has(.card) .card p:first-child{margin-top:0}
+.page:has(.card) .card p:last-child{margin-bottom:0}
+.page:has(.card) a{color:#7aa2f7}
+.page:has(.card) details{margin-top:32px}
+.page:has(.card) summary{cursor:pointer;font-size:23px;font-weight:600}
+.page:has(.card) details p{margin-bottom:0}
