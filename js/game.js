@@ -22,13 +22,31 @@
     if (!match) return null;
     return "S" + match[1].padStart(2, "0") + "E" + match[2].padStart(2, "0");
   }
+  function numericMatches(value) {
+    const byEpisode = value.match(/^\s*x\s*(\d{1,2})\s*$/i);
+    if (byEpisode) {
+      const episode = Number(byEpisode[1]);
+      return episodes.filter(ep => Number(ep.id.slice(4)) === episode);
+    }
+    const byX = value.match(/^\s*(\d{1,2})\s*x\s*(\d{0,2})\s*$/i);
+    const bySpace = value.match(/^\s*(\d{1,2})(\s+)(\d{0,2})\s*$/);
+    const match = byX || bySpace;
+    if (!match) return null;
+    const season = Number(match[1]);
+    const episodeText = byX ? match[2] : match[3];
+    return episodes.filter(ep => Number(ep.id.slice(1, 3)) === season &&
+      (!episodeText || Number(ep.id.slice(4)) === Number(episodeText)));
+  }
   function close() { list.hidden = true; input.setAttribute("aria-expanded", "false"); highlighted = -1; }
   function render() {
     const q = normalize(input.value);
     const code = episodeCode(input.value);
-    visible = code
-      ? episodes.filter(ep => ep.id === code)
-      : episodes.filter(ep => !q || normalize(label(ep)).includes(q));
+    const numeric = numericMatches(input.value);
+    visible = numeric !== null
+      ? numeric
+      : code
+        ? episodes.filter(ep => ep.id === code)
+        : episodes.filter(ep => !q || normalize(label(ep)).includes(q));
     list.replaceChildren();
     if (!visible.length) { close(); return; }
     visible.forEach((ep, i) => {
