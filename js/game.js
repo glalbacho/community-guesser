@@ -23,6 +23,7 @@
     return "S" + match[1].padStart(2, "0") + "E" + match[2].padStart(2, "0");
   }
   function numericMatches(value) {
+    if (/^\s*x\s*$/i.test(value)) return [];
     const byEpisode = value.match(/^\s*x\s*(\d{1,2})\s*$/i);
     if (byEpisode) {
       const episode = Number(byEpisode[1]);
