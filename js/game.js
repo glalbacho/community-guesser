@@ -17,10 +17,18 @@
   let visible = [];
   const label = ep => ep.id + " " + ep.title;
   const normalize = x => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  function episodeCode(value) {
+    const match = value.trim().match(/^(?:s\s*)?(\d{1,2})\s*(?:x|e|\s+)\s*(\d{1,2})\s*$/i);
+    if (!match) return null;
+    return "S" + match[1].padStart(2, "0") + "E" + match[2].padStart(2, "0");
+  }
   function close() { list.hidden = true; input.setAttribute("aria-expanded", "false"); highlighted = -1; }
   function render() {
     const q = normalize(input.value);
-    visible = episodes.filter(ep => !q || normalize(label(ep)).includes(q));
+    const code = episodeCode(input.value);
+    visible = code
+      ? episodes.filter(ep => ep.id === code)
+      : episodes.filter(ep => !q || normalize(label(ep)).includes(q));
     list.replaceChildren();
     if (!visible.length) { close(); return; }
     visible.forEach((ep, i) => {
@@ -51,7 +59,7 @@
   document.addEventListener("pointerdown", e => { if (!e.target.closest(".search-wrap")) close(); });
   form.addEventListener("submit", e => {
     e.preventDefault();
-    const match = selected || episodes.find(ep => normalize(label(ep)) === normalize(input.value));
+    const match = selected || episodes.find(ep => ep.id === episodeCode(input.value) || normalize(label(ep)) === normalize(input.value));
     if (!match) { feedback.textContent = "Please select an episode from the list."; return; }
     // Until real screenshots are available, guessing must not award points.
     feedback.textContent = "Selected: " + label(match) + ". Test mode — scoring is not active yet.";
