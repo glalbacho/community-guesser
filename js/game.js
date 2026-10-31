@@ -20,7 +20,7 @@
   function close() { list.hidden = true; input.setAttribute("aria-expanded", "false"); highlighted = -1; }
   function render() {
     const q = normalize(input.value);
-    visible = episodes.filter(ep => !q || normalize(label(ep)).includes(q)).slice(0,8);
+    visible = episodes.filter(ep => !q || normalize(label(ep)).includes(q));
     list.replaceChildren();
     if (!visible.length) { close(); return; }
     visible.forEach((ep, i) => {
