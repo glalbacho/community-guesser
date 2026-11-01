@@ -10,10 +10,16 @@
   const feedback = document.getElementById("feedback");
   const scoreEl = document.getElementById("score");
   const highEl = document.getElementById("high-score");
+  const modeSelect = document.getElementById("game-mode");
   const imageBox = document.querySelector(".placeholder");
   const highScoreKey = "community-guesser-high-score";
+  const modeKey = "community-guesser-mode";
 
   const label = ep => ep.id + " " + ep.title;
+  let mode = "normal";
+  try { if (localStorage.getItem(modeKey) === "hard") mode = "hard"; } catch (_) {}
+  modeSelect.value = mode;
+  const displayLabel = ep => mode === "hard" ? ep.id : label(ep);
   const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const episodeNumber = ep => Number(ep.id.slice(4));
   const seasonNumber = ep => Number(ep.id.slice(1, 3));
@@ -26,6 +32,7 @@
   let highlighted = -1;
   let visible = [];
   let gameOver = false;
+  let lastStreak = 0;
   let currentEpisode = null;
   let previousId = null;
   let remaining = [];
@@ -104,7 +111,7 @@
       option.id = "episode-option-" + i;
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", "false");
-      option.textContent = label(ep);
+      option.textContent = displayLabel(ep);
       option.addEventListener("mousedown", event => event.preventDefault());
       option.addEventListener("click", () => choose(ep));
       suggestions.appendChild(option);
@@ -130,11 +137,24 @@
 
   function choose(ep) {
     selected = ep;
-    input.value = label(ep);
+    input.value = displayLabel(ep);
     closeSuggestions();
     feedback.textContent = "";
     input.focus();
   }
+
+  function gameOverMessage() {
+    return "Game over! Correct answer: " + displayLabel(currentEpisode) +
+      ". Your streak: " + lastStreak + ".";
+  }
+
+  modeSelect.addEventListener("change", () => {
+    mode = modeSelect.value === "hard" ? "hard" : "normal";
+    try { localStorage.setItem(modeKey, mode); } catch (_) {}
+    if (selected) input.value = displayLabel(selected);
+    if (gameOver && currentEpisode) feedback.textContent = gameOverMessage();
+    if (!gameOver && !suggestions.hidden) renderSuggestions();
+  });
 
   input.addEventListener("focus", renderSuggestions);
   input.addEventListener("input", () => {
@@ -241,15 +261,14 @@
       closeSuggestions();
       nextRound();
     } else {
-      const streak = score;
+      lastStreak = score;
       score = 0;
       scoreEl.textContent = "0";
       gameOver = true;
       input.disabled = true;
       button.textContent = "Play again";
       closeSuggestions();
-      feedback.textContent = "Game over! Correct answer: " + label(currentEpisode) +
-        ". Your streak: " + streak + ".";
+      feedback.textContent = gameOverMessage();
       button.focus();
     }
   });
