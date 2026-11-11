@@ -43,35 +43,35 @@
     if (!query || /^[sxe]$/i.test(query)) return episodes;
 
     // E1 / x1 means *episode 1*, not episodes 10–19.
-    const byEpisode = query.match(/^[ex]\s*(\d{0,2})$/i);
+    const byEpisode = query.match(/^[ex]\s*(\d*)$/i);
     if (byEpisode) {
       const n = byEpisode[1];
       if (!n) return episodes;
-      if (n === "0") return episodes.filter(ep => episodeNumber(ep) < 10);
+      if (/^0+$/.test(n)) return episodes.filter(ep => episodeNumber(ep) < 10);
       return episodes.filter(ep => episodeNumber(ep) === Number(n) && Number(n) > 0);
     }
 
     // S1, S01, S1E, S1E3, S01 E 03, S1 x 03.
-    const prefixed = query.match(/^s\s*(\d{0,2})(?:\s*[ex]\s*(\d{0,2}))?$/i);
+    const prefixed = query.match(/^s\s*(\d+)(?:\s*[ex]\s*(\d*))?$/i);
     if (prefixed) {
       const sn = prefixed[1], en = prefixed[2];
-      if (!sn || sn === "0") return episodes;
+      if (!sn || Number(sn) === 0) return episodes;
       return filterNumbers(Number(sn), en);
     }
 
     // 1x3 / 01 x 03; a separator without an episode shows the entire season.
-    const withX = query.match(/^(\d{1,2})\s*x\s*(\d{0,2})$/i);
+    const withX = query.match(/^(\d+)\s*x\s*(\d*)$/i);
     if (withX) return filterNumbers(Number(withX[1]), withX[2]);
 
     // 1 3 / 01   03, with arbitrary whitespace.
-    const withSpace = query.match(/^(\d{1,2})\s+(\d{1,2})$/);
+    const withSpace = query.match(/^(\d+)\s+(\d+)$/);
     if (withSpace) return filterNumbers(Number(withSpace[1]), withSpace[2]);
 
     // A bare number is a season, making 1 -> 1x -> 1x3 continuous.
-    const bareSeason = query.match(/^(\d{1,2})$/);
+    const bareSeason = query.match(/^(\d+)$/);
     if (bareSeason) {
       const n = Number(bareSeason[1]);
-      return n === 0 && bareSeason[1] === "0"
+      return n === 0
         ? episodes
         : episodes.filter(ep => seasonNumber(ep) === n);
     }
@@ -86,7 +86,7 @@
       if (seasonNumber(ep) !== season) return false;
       if (episodeText === undefined || episodeText === "") return true;
       // While entering 03, show E01–E09 after typing only the first zero.
-      if (episodeText === "0") return episodeNumber(ep) < 10;
+      if (/^0+$/.test(episodeText)) return episodeNumber(ep) < 10;
       return Number(episodeText) > 0 && episodeNumber(ep) === Number(episodeText);
     });
   }
@@ -201,23 +201,75 @@
     return playable.find(ep => ep.id === id);
   }
 
+  // Keep TWO complete future rounds preloaded. The episode is chosen first,
+  // then one uniformly random screenshot from that episode.
+  const preparedRounds = [];
+  let shownRound = null;
+
+  function prepareRound() {
+    const episode = nextEpisode();
+    if (!episode) return null;
+    const urls = Array.isArray(imagePool[episode.id])
+      ? imagePool[episode.id].filter(url => typeof url === "string" && url.length > 0)
+      : [];
+    const url = urls.length ? urls[Math.floor(Math.random() * urls.length)] : null;
+    const round = { episode, image: null, status: "loading", ready: null };
+    if (!url) {
+      round.status = "error";
+      round.ready = Promise.resolve();
+      return round;
+    }
+    const img = new Image();
+    img.alt = "Guess the Community episode";
+    img.decoding = "async";
+    img.style.cssText = "width:100%;height:100%;object-fit:contain;display:block";
+    round.image = img;
+    round.ready = new Promise(resolve => {
+      img.onload = async () => {
+        try { if (img.decode) await img.decode(); } catch (_) {}
+        round.status = "ready";
+        resolve();
+      };
+      img.onerror = () => {
+        round.status = "error";
+        resolve();
+      };
+      img.src = url;
+    });
+    return round;
+  }
+
   function nextRound() {
-    currentEpisode = nextEpisode();
-    if (!currentEpisode) {
-      feedback.textContent = "No episode images are available.";
+    if (!preparedRounds.length) {
+      const first = prepareRound();
+      if (first) preparedRounds.push(first);
+    }
+    const round = preparedRounds.shift();
+    // Prepare the next two rounds before the player answers.
+    while (preparedRounds.length < 2) {
+      const future = prepareRound();
+      if (!future) break;
+      preparedRounds.push(future);
+    }
+    if (!round) {
+      currentEpisode = null;
+      imageBox.textContent = "ERROR: NO EPISODES";
       return;
     }
-    const images = imagePool[currentEpisode.id].filter(url => typeof url === "string" && url);
-    const img = document.createElement("img");
-    img.src = images[Math.floor(Math.random() * images.length)];
-    img.alt = "Guess the Community episode";
-    img.style.cssText = "width:100%;height:100%;object-fit:contain;display:block";
-    img.onerror = () => {
-      currentEpisode = null;
-      imageBox.textContent = "IMAGE UNAVAILABLE";
-      feedback.textContent = "Could not load the test image.";
-    };
-    imageBox.replaceChildren(img);
+    currentEpisode = round.episode;
+    shownRound = round;
+    function render() {
+      if (shownRound !== round) return;
+      if (round.status === "ready") {
+        imageBox.replaceChildren(round.image);
+      } else if (round.status === "error") {
+        imageBox.textContent = "ERROR: IMAGE NOT AVAILABLE";
+      } else {
+        imageBox.textContent = "LOADING...";
+      }
+    }
+    render();
+    round.ready.then(render);
   }
 
   function playAgain() {
