@@ -45,6 +45,8 @@
   const threeEnabled = () => (challenge === "classic" && mode === "easy") || customHas("three");
   const distortedEnabled = () => (challenge === "classic" && mode === "impossible") || customHas("distort");
   const openOptions = $("open-options"), optionsPanel = $("options-panel");
+  const optionsView = $("options-view"), optionsBack = $("options-back");
+  let activeView = "game";
   const optionShowOnFocus = $("option-show-on-focus"), optionAutoFocus = $("option-auto-focus");
   const optionTimelineSpeed = $("option-timeline-speed");
   const timelineDurations = {fast:300,normal:700,slow:1300};
@@ -132,10 +134,8 @@
     timelineSpeed=optionTimelineSpeed.value;
     saveOptions();
   });
-  openOptions.addEventListener("click", () => {
-    optionsPanel.hidden = !optionsPanel.hidden;
-    openOptions.setAttribute("aria-expanded", String(!optionsPanel.hidden));
-  });
+  openOptions.addEventListener("click", () => navigateTo("options"));
+  optionsBack.addEventListener("click", () => navigateTo("game"));
   customLivesInput.addEventListener("input", () => {
     customLivesDisplay.textContent = customLivesInput.value;
     updateCustomSummary();
@@ -406,7 +406,7 @@
       ? "Community-le solved in " + communityleHistory.length + " / 6 guesses!"
       : "No guesses left. The episode was " + label(byId[communityleSolution.id]) + ".";
     renderCommunityle();
-    showCommunityleAnswerReveal(won);
+    clearAnswerReveal();
     checkBoard(won ? 7 - communityleHistory.length : 0);
   }
   function readDaily() {
@@ -731,13 +731,52 @@
       highscoresStatus.textContent="Website-wide high scores are not available yet. Connect the Cloudflare D1 database to activate the rankings.";
     }
   }
-  function toggleHighscores(open) {
-    highscoresOpenState=open;
-    if(!open)highscoresFetchVersion++;
-    gameView.hidden=open;
-    highscoresView.hidden=!open;
-    if(open){openMenu(false);loadAllHighscores();}
+  // Hash routes survive reloads and work on static Cloudflare/GitHub hosting.
+  // Examples: #/daily, #/season/3, #/classic/hard, #/options.
+  function gameRoute() {
+    if(challenge==="classic")return "/classic/"+mode;
+    if(challenge==="season")return "/season/"+season;
+    return "/"+challenge;
   }
+  function setRoute(route) {
+    const hash="#"+route;
+    if(typeof window.history?.pushState==="function") {
+      window.history.pushState(null,"",hash);
+    }else if(window.location)window.location.hash=hash;
+  }
+  function navigateTo(view) {
+    activeView=view;
+    gameView.hidden=view!=="game";
+    highscoresView.hidden=view!=="highscores";
+    optionsView.hidden=view!=="options";
+    highscoresOpenState=view==="highscores";
+    if(view!=="highscores")highscoresFetchVersion++;
+    openMenu(false);
+    setRoute(view==="game"?gameRoute():"/"+view);
+    if(view==="highscores")loadAllHighscores();
+  }
+  function restoreRoute() {
+    const raw=typeof window.location?.hash==="string"?window.location.hash.slice(1):"";
+    const parts=raw.replace(/^\//,"").split("/");
+    const name=parts[0];
+    if(name==="highscores"||name==="options"){
+      navigateTo(name);
+      return;
+    }
+    if(name==="classic"&&["easy","normal","hard","impossible"].includes(parts[1])){
+      mode=parts[1];modeSelect.value=mode;
+    }
+    if(name==="season"&&/^[1-6]$/.test(parts[1]))season=Number(parts[1]);
+    if(challengeNames[name] && name!=="classic")challenge=name;
+    else challenge="classic";
+    if(challenge==="custom")customStarted=false;
+    resetGame();
+    activeView="game";
+    gameView.hidden=false;highscoresView.hidden=true;optionsView.hidden=true;
+  }
+  if(typeof window.addEventListener==="function")
+    window.addEventListener("popstate",restoreRoute);
+  function toggleHighscores(open) { navigateTo(open?"highscores":"game"); }
   highscoresOpen.addEventListener("click",()=>toggleHighscores(true));
   highscoresBack.addEventListener("click",()=>toggleHighscores(false));
   highscoresRefresh.addEventListener("click",()=>{if(highscoresOpenState)loadAllHighscores();});
@@ -801,7 +840,7 @@
     awaitingNext = false; selected = null; highlighted = -1; visible = [];
     currentFrame = 0; revealStage = 1; timelineSelection = -1;
     input.value = ""; input.disabled = false; button.disabled = false;
-    button.textContent = "Guess"; feedback.textContent = "";
+    button.textContent = "Guess"; button.hidden = false; feedback.textContent = "";
     closeSuggestions();
     scoreEl.textContent = "0";
     high = loadHigh(); highEl.textContent = String(high);
@@ -840,6 +879,7 @@
     if (name === "custom") customStarted = false;
     openMenu(false);
     resetGame();
+    navigateTo("game");
   }
   challengeLinks.forEach(link => link.addEventListener("click", () => activate(link.getAttribute("data-challenge"))));
   modeSelect.addEventListener("change", () => {
@@ -849,12 +889,14 @@
     try { localStorage.setItem(modeKey, mode); } catch (_) {}
     challenge = "classic";
     resetGame();
+    navigateTo("game");
   });
   seasonSelect.addEventListener("change", () => {
     const value = Number(seasonSelect.value);
     if (Number.isInteger(value) && value >= 1 && value <= 6) {
       season = value;
       resetGame();
+      navigateTo("game");
     }
   });
 
@@ -927,7 +969,7 @@
     if (gameOver) return;
     currentFrame = 0; revealStage = 1; selected = null;
     timelineSelection = -1; awaitingNext = false;
-    input.value = ""; input.disabled = false; button.disabled = false; button.textContent = "Guess";
+    input.value = ""; input.disabled = false; button.disabled = false; button.hidden = false; button.textContent = "Guess";
     closeSuggestions();
     feedback.textContent = "";
     if (challenge === "timeline") {
@@ -1314,7 +1356,7 @@
       ?"Perfect! You placed the episodes in the correct order."
       :"This was the correct broadcast order.";
     const popDuration=timelineAnimationDuration()===0?0:
-      Math.max(130,Math.min(360,Math.round(timelineAnimationDuration()*.27)));
+      correct ? 90 : Math.max(130,Math.min(360,Math.round(timelineAnimationDuration()*.27)));
     // Show one answer at a time, deliberately left-to-right, only after
     // the positions have settled. Wrong answers turn red, never green.
     for(let i=0;i<timelineCards.children.length;i++) {
@@ -1362,7 +1404,7 @@
     input.disabled = true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     timelineSubmit.disabled = true;
-    button.textContent = "Play again";
+    button.hidden = true;
     restart.hidden = false;
     restart.textContent = "Play again";
     if (challenge === "one110" && answered >= playable.length) restart.textContent = "Play again";
@@ -1371,11 +1413,10 @@
     if (!fourEnabled() && challenge !== "timeline") button.disabled = false;
     if (challenge !== "daily" && challenge !== "communityle") {
       if(challenge==="timeline"){
-        // Keep the solution within the same timeline instead of below it.
+        // Show the corrected timeline in the same three cards.
         revealTimelineInPlace(!message.startsWith("Game over"));
-      }else{
-        showAnswerRevealForRound(!message.startsWith("Game over"));
       }
+      // Other modes already display the answer next to the existing image.
       checkBoard(finalScore);
     }
   }
@@ -1516,5 +1557,5 @@
   document.addEventListener("pointerdown", event => {
     if (!event.target.closest(".search-wrap")) closeSuggestions();
   });
-  resetGame();
+  restoreRoute();
 })();
