@@ -289,3 +289,11 @@ button,select,input{font-family:inherit}
 .communityle-result-share:hover{background:#497fac}.communityle-result-copy:hover{background:#48576d}
 .communityle-result-status{min-height:16px;margin:12px 0 0;font-size:12px;color:#b4dcca}
 @media(max-width:375px){.communityle-result-dialog{padding:26px 13px 19px}.communityle-result-actions{gap:7px}.communityle-result-actions button{font-size:12px}}
+
+/* Two independent Wordle-style number hints: season and episode number. */
+.communityle-two-hints{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.communityle-hint-block{display:inline-flex;align-items:center;justify-content:center;font-size:22px;line-height:1;width:28px;height:28px}
+.communityle-hint-block.pending{color:#8993a3;font-size:17px}
+.communityle-hint-key{display:flex;justify-content:flex-end;gap:10px;margin:2px 0 7px;color:#acbad1;font-size:11px;font-weight:700}
+.communityle-hint-key span{min-width:31px;text-align:center}
+@media(max-width:600px){.communityle-hint-block{width:23px;height:25px;font-size:20px}.communityle-two-hints{gap:4px}.communityle-hint-key{gap:5px}}
