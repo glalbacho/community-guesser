@@ -20,6 +20,18 @@
   const textAnswer = $("text-answer"), fourChoices = $("four-choices");
   const communityleBoard = $("communityle-board"), communityleDate = $("communityle-date");
   const communityleAttempts = $("communityle-attempts"), communityleGuesses = $("communityle-guesses");
+  const communityleResultModal = $("communityle-result-modal");
+  const communityleShowResult = $("communityle-show-result");
+  const communityleResultClose = $("communityle-result-close");
+  const communityleResultBackdrop = $("communityle-result-backdrop");
+  const communityleResultTitle = $("communityle-result-title");
+  const communityleResultDescription = $("communityle-result-description");
+  const communityleResultScore = $("communityle-result-score");
+  const communityleResultGrid = $("communityle-result-grid");
+  const communityleResultStatus = $("communityle-result-status");
+  const communityleShare = $("communityle-result-share");
+  const communityleCopy = $("communityle-result-copy");
+  let communityleResultPreviousFocus = null;
   const timelineBoard = $("timeline-board"), timelineCards = $("timeline-cards");
   const timelineSubmit = $("timeline-submit"), restart = $("restart-challenge");
   const timelineInstruction = $("timeline-instruction");
@@ -416,6 +428,113 @@
       communityleGuesses.appendChild(row);
     }
   }
+  function communityleShareUrl() {
+    // Use the exact hosted base path (Cloudflare Pages or a custom domain).
+    // The existing #/communityle route works after a normal page reload.
+    const base = window.location?.origin && window.location?.pathname
+      ? window.location.origin + window.location.pathname
+      : "https://www.glalbacho.de/community-guesser/";
+    return base + "#/communityle";
+  }
+  function communityleResultRows() {
+    if (!communityleSolution) return [];
+    return communityleHistory.map(id => {
+      if(id===communityleSolution.id)return "🟩".repeat(5);
+      if(byId[id] && seasonNumber(byId[id])===seasonNumber(byId[communityleSolution.id]))
+        return "🟨".repeat(5);
+      return "⬛".repeat(5);
+    });
+  }
+  function communityleShareText() {
+    const won=communityleHistory.includes(communityleSolution.id);
+    const count=won?communityleHistory.indexOf(communityleSolution.id)+1:"X";
+    return "Community-le " + dailyDate() + " " + count + "/6"
+      + "\n\n" + communityleResultRows().join("\n")
+      + "\n\nPlay today's Community-le:\n" + communityleShareUrl();
+  }
+  function closeCommunityleResult() {
+    if (communityleResultModal.hidden) return;
+    communityleResultModal.hidden=true;
+    if(communityleResultPreviousFocus && typeof communityleResultPreviousFocus.focus==="function" &&
+       !communityleResultPreviousFocus.disabled && !communityleResultPreviousFocus.hidden)
+      communityleResultPreviousFocus.focus();
+    communityleResultPreviousFocus=null;
+  }
+  function openCommunityleResult() {
+    if(challenge!=="communityle" || !communityleSolution || !communityleDone())return;
+    const won=communityleHistory.includes(communityleSolution.id);
+    communityleResultTitle.textContent=won?"Episode guessed!":"Not quite this time";
+    communityleResultDescription.textContent=won
+      ?"You solved today's episode. Share your spoiler-free result!"
+      :"All six guesses used. Share your result and challenge your friends.";
+    communityleResultScore.textContent="Community-le · "+dailyDate()+" · "+
+      (won?communityleHistory.indexOf(communityleSolution.id)+1:"X")+"/6";
+    communityleResultGrid.replaceChildren();
+    communityleResultRows().forEach((line,i)=>{
+      const row=document.createElement("div");
+      row.textContent=line;
+      row.setAttribute("aria-label","Guess "+(i+1)+": "+
+        (line.startsWith("🟩")?"Correct episode":
+          line.startsWith("🟨")?"Correct season":"Wrong season"));
+      communityleResultGrid.appendChild(row);
+    });
+    communityleResultStatus.textContent="";
+    communityleResultPreviousFocus=document.activeElement;
+    communityleResultModal.hidden=false;
+    communityleResultClose.focus();
+  }
+  async function copyCommunityleResult() {
+    const text=communityleShareText();
+    try{
+      if(navigator.clipboard?.writeText){
+        await navigator.clipboard.writeText(text);
+      }else{
+        // Copy fallback for browsers without the Clipboard API.
+        const field=document.createElement("textarea");
+        field.value=text;
+        field.setAttribute("readonly","");
+        field.style.position="fixed";
+        field.style.opacity="0";
+        document.body.appendChild(field);
+        field.select();
+        if(!document.execCommand || !document.execCommand("copy"))
+          throw new Error("Clipboard copy not supported");
+        field.remove();
+      }
+      communityleResultStatus.textContent="Result copied! Paste it anywhere.";
+    }catch(_){
+      communityleResultStatus.textContent="Copy unavailable here. Try Share result instead.";
+    }
+  }
+  communityleResultClose.addEventListener("click",closeCommunityleResult);
+  communityleResultBackdrop.addEventListener("click",closeCommunityleResult);
+  communityleShowResult.addEventListener("click",openCommunityleResult);
+  communityleCopy.addEventListener("click",copyCommunityleResult);
+  communityleShare.addEventListener("click",async()=>{
+    const text=communityleShareText();
+    if(typeof navigator.share==="function"){
+      try {
+        await navigator.share({text});
+        communityleResultStatus.textContent="";
+        return;
+      }catch(error){
+        if(error && error.name==="AbortError")return;
+      }
+    }
+    await copyCommunityleResult();
+  });
+  document.addEventListener("keydown",event=>{
+    if(communityleResultModal.hidden)return;
+    if(event.key==="Escape"){
+      event.preventDefault();closeCommunityleResult();return;
+    }
+    if(event.key==="Tab"){
+      const items=[communityleResultClose,communityleShare,communityleCopy];
+      const idx=items.indexOf(document.activeElement);
+      if(event.shiftKey && idx<=0){event.preventDefault();items.at(-1).focus();}
+      else if(!event.shiftKey && idx===items.length-1){event.preventDefault();items[0].focus();}
+    }
+  });
   function finishCommunityle() {
     const won = communityleHistory.includes(communityleSolution.id);
     gameOver = true;
@@ -429,6 +548,8 @@
       : "No guesses left. The episode was " + label(byId[communityleSolution.id]) + ".";
     renderCommunityle();
     clearAnswerReveal();
+    communityleShowResult.hidden=false;
+    openCommunityleResult();
     checkBoard(won ? 7 - communityleHistory.length : 0);
   }
   function readDaily() {
@@ -858,6 +979,8 @@
     });
   }
   function resetGame() {
+    closeCommunityleResult();
+    communityleShowResult.hidden=true;
     timelineRevealed=false;
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
