@@ -123,6 +123,11 @@
         <button type="button" id="restart-challenge" class="restart-challenge" hidden>Play again</button>
 
       </form>
+      <section id="answer-reveal" class="answer-reveal" aria-label="Answer reveal" aria-live="polite" hidden>
+        <div class="answer-reveal-heading"><span class="answer-reveal-icon" aria-hidden="true">✓</span><div><span class="answer-reveal-eyebrow">ROUND RECAP</span><h2 id="answer-reveal-title">Correct answer</h2></div></div>
+        <p id="answer-reveal-detail" class="answer-reveal-detail"></p>
+        <div id="answer-reveal-items" class="answer-reveal-items"></div>
+      </section>
         <section class="leaderboard" id="leaderboard" aria-label="Website leaderboard" hidden>
           <div class="leaderboard-heading"><span aria-hidden="true">🏆</span><h2>Website Top 3</h2></div>
           <p id="leaderboard-status" class="leaderboard-status" role="status" aria-live="polite"></p>
