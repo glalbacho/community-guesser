@@ -2,7 +2,18 @@
 *{box-sizing:border-box}html{min-height:100%}body{margin:0;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif}
 .page{min-height:100vh;display:flex;flex-direction:column}.game{width:min(100% - 32px,960px);margin:0 auto;text-align:center;flex:1}
 header{padding:18px 20px 6px}header h1{margin:0;font-size:25px;line-height:1.3;font-weight:700}
-.placeholder{width:100%;aspect-ratio:16/9;background:#24262b;border:1px solid #393c44;display:grid;place-items:center;margin:10px auto 16px}
+.frame-viewer{position:relative;width:100%;margin:10px auto 16px;border-radius:14px;overflow:hidden;background:#17191d;border:1px solid #393c44;box-shadow:0 16px 38px rgba(0,0,0,.28);isolation:isolate}
+.placeholder{width:100%;aspect-ratio:16/9;background:#24262b;display:grid;place-items:center;overflow:hidden}
+.frame-navigation{position:absolute;inset:0 0 auto;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:14px;pointer-events:none}
+.frame-navigation[hidden]{display:none}
+.frame-navigation::before{content:"";position:absolute;z-index:-1;inset:0 0 auto;height:92px;background:linear-gradient(180deg,rgba(0,0,0,.54),transparent)}
+.frame-arrow{pointer-events:auto;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid rgba(255,255,255,.24);border-radius:12px;background:rgba(24,26,31,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;font:400 34px/1 Arial,Helvetica,sans-serif;cursor:pointer;transition:background .18s,transform .18s,opacity .18s}
+.frame-arrow span{transform:translateY(-2px)}
+.frame-arrow:hover:not(:disabled){background:rgba(68,72,83,.88);transform:translateY(-1px)}
+.frame-arrow:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.frame-arrow:disabled{opacity:.35;cursor:default}
+.frame-counter{min-width:84px;padding:10px 16px;border:1px solid rgba(255,255,255,.24);border-radius:24px;background:rgba(24,26,31,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;font-size:14px;font-weight:700;letter-spacing:.07em;font-variant-numeric:tabular-nums;text-align:center}
+@media(max-width:600px){.frame-viewer{border-radius:10px}.frame-navigation{padding:10px}.frame-arrow{width:38px;height:38px;border-radius:10px;font-size:30px}.frame-counter{min-width:72px;padding:8px 12px;font-size:12px}}
 .placeholder span{font-size:clamp(28px,5vw,64px);color:#9ca0aa;font-weight:700;letter-spacing:.12em}
 .guess-area{max-width:396px;margin:0 auto;position:relative}.search-wrap{position:relative}
 #episode-input{display:block;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:4px;color:var(--fg);font-size:21px;padding:12px 11px;height:51px}
