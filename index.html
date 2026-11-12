@@ -52,6 +52,24 @@
           <label><input type="checkbox" value="5" data-custom-season checked> Season 5</label>
           <label><input type="checkbox" value="6" data-custom-season checked> Season 6</label>
         </fieldset>
+
+        <div class="custom-combos">
+          <h3>Combine game mechanics</h3>
+          <p>Mix your favorite features in one game.</p>
+          <fieldset class="custom-modifiers"><legend>Guessing</legend>
+            <label class="custom-modifier"><input type="checkbox" id="custom-four"><span><strong>Four Choices</strong><small>Choose from four episodes instead of typing</small></span></label>
+            <label class="custom-modifier"><input type="checkbox" id="custom-numbers"><span><strong>Episode numbers only</strong><small>Hide the episode titles from answers</small></span></label>
+          </fieldset>
+          <fieldset class="custom-modifiers"><legend>Image mechanics</legend>
+            <label class="custom-modifier"><input type="checkbox" id="custom-three"><span><strong>Three screenshots</strong><small>Beginning, middle and end of the same episode</small></span></label>
+            <label class="custom-modifier"><input type="checkbox" id="custom-reveal"><span><strong>Progressive Reveal</strong><small>Reveal more detail for fewer points</small></span></label>
+            <label class="custom-modifier"><input type="checkbox" id="custom-distort"><span><strong>Impossible effects</strong><small>Random colors, zoom, rotation and pixelation</small></span></label>
+          </fieldset>
+          <fieldset class="custom-modifiers"><legend>Extra rules</legend>
+            <label class="custom-modifier"><input type="checkbox" id="custom-once"><span><strong>Every episode once</strong><small>Finish after all selected episodes have appeared</small></span></label>
+          </fieldset>
+        </div>
+        <p id="custom-summary" class="custom-summary" aria-live="polite"></p>
         <p id="custom-error" class="custom-error" role="alert" hidden>Choose at least one season.</p>
         <div class="custom-actions"><button type="button" id="custom-start" class="primary-action">Start custom game</button></div>
       </section>
