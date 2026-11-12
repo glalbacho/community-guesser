@@ -298,7 +298,28 @@
       try { localStorage.setItem(modeHighKey(), String(high)); } catch (_) {}
     }
   }
-  function dailyDate() { return new Date().toISOString().slice(0, 10); }
+  // Both daily challenges switch at 06:00 Europe/Berlin, regardless of
+  // the player's device timezone and automatically across CET/CEST.
+  const berlinClock = new Intl.DateTimeFormat("en-GB", {
+    timeZone:"Europe/Berlin",year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",hourCycle:"h23"
+  });
+  function dailyDate(now = new Date()) {
+    const parts=Object.fromEntries(berlinClock.formatToParts(now)
+      .filter(p=>p.type!=="literal").map(p=>[p.type,p.value]));
+    const y=Number(parts.year),m=Number(parts.month),d=Number(parts.day);
+    // Before 06:00 local time, yesterday's puzzle is still current.
+    const date=new Date(Date.UTC(y,m-1,d-(Number(parts.hour)<6?1:0)));
+    return date.toISOString().slice(0,10);
+  }
+  let loadedDailyDate = null;
+  function refreshDailyAtBoundary() {
+    if (challenge!=="daily" && challenge!=="communityle") return false;
+    const today=dailyDate();
+    if(loadedDailyDate===today)return false;
+    resetGame();
+    return true;
+  }
   function dayKey() { return "community-guesser-daily-" + dailyDate(); }
   function communityleKey() { return "community-guesser-communityle-" + dailyDate(); }
   function stableHash(text) {
@@ -331,8 +352,8 @@
       return { id, url: urls[Math.floor(rng() * urls.length)] };
     });
   }
-  // A seeded daily choice means every user with the same published catalogue
-  // gets exactly the same screenshot for the entire UTC day.
+  // A seeded daily choice means everyone gets the same screenshot from
+  // 06:00 Berlin time until 06:00 Berlin time on the following day.
   function communityleSchedule() {
     const rng = seededRandom(stableHash("community-le-v1:" + dailyDate()));
     const eligible = playable.slice().sort((a,b) => a.id.localeCompare(b.id));
@@ -362,7 +383,7 @@
       communityleHistory.includes(communityleSolution.id) || communityleHistory.length >= 6);
   }
   function renderCommunityle() {
-    communityleDate.textContent = dailyDate() + " · UTC daily";
+    communityleDate.textContent = dailyDate() + " · resets 06:00 Berlin";
     communityleAttempts.textContent = communityleHistory.length + " / 6 guesses";
     communityleGuesses.replaceChildren();
     for (let i = 0; i < 6; i++) {
@@ -868,6 +889,8 @@
     scoreEl.textContent = "0";
     high = loadHigh(); highEl.textContent = String(high);
     updateShell();
+    if (challenge === "communityle" || challenge === "daily") loadedDailyDate=dailyDate();
+    else loadedDailyDate=null;
     if (challenge === "communityle") {
       communityleSolution = communityleSchedule();
       if (!communityleSolution) { finishGame("No episode images available."); return; }
@@ -1050,7 +1073,7 @@
       (customHas("once") ? " · " + answered + " / " + episodePool().length : "") +
       " · " + score + " points";
     if (challenge === "one110") message = (answered + 1) + " / " + playable.length + " episodes";
-    if (challenge === "daily") message = dailyDate() + " (UTC) · " + (answered + 1) + " / 5";
+    if (challenge === "daily") message = dailyDate() + " (Berlin) · " + (answered + 1) + " / 5";
     if (challenge === "season") message = episodePool().length + " episodes in this season";
     progressDetail.textContent = message;
     if (revealEnabled()) {
@@ -1478,9 +1501,9 @@
     revealControls.hidden = true;
     textAnswer.hidden = true;
     fourChoices.hidden = true;
-    const summary = "Daily Challenge complete: " + score + " / 5 correct. New challenge at 00:00 UTC.";
+    const summary = "Daily Challenge complete: " + score + " / 5 correct. Next challenge at 06:00 Berlin time.";
     feedback.textContent = summary;
-    progressDetail.textContent = dailyDate() + " (UTC) · 5 / 5";
+    progressDetail.textContent = dailyDate() + " (Berlin) · 5 / 5";
     restart.hidden = true;
     showDailyAnswerReveal();
     checkBoard(score);
@@ -1491,6 +1514,7 @@
     createRound();
   }
   function answer(value, correction = "") {
+    if (refreshDailyAtBoundary()) return;
     if (gameOver || awaitingNext || !currentRound) return;
     if (challenge === "communityle") {
       if (typeof value !== "string" || !byId[value]) return;
@@ -1581,6 +1605,7 @@
   }
   form.addEventListener("submit", event => {
     event.preventDefault();
+    if(refreshDailyAtBoundary())return;
     if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(); return; }
     if (fourEnabled() || challenge === "timeline" || gameOver) return;
     resolveInput();
@@ -1645,4 +1670,15 @@
     if (!event.target.closest(".search-wrap")) closeSuggestions();
   });
   restoreRoute();
+  // Also refresh without a page reload if the tab stays open over 06:00.
+  // In background tabs browser timers may be suspended; visibility/focus
+  // triggers an immediate check on return.
+  if(typeof window.setInterval==="function")
+    window.setInterval(refreshDailyAtBoundary,10000);
+  if(typeof document.addEventListener==="function")
+    document.addEventListener("visibilitychange",()=>{
+      if(!document.hidden)refreshDailyAtBoundary();
+    });
+  if(typeof window.addEventListener==="function")
+    window.addEventListener("focus",refreshDailyAtBoundary);
 })();
