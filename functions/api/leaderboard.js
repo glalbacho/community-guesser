@@ -26,7 +26,23 @@ export async function onRequest({request,env}) {
   try {
     await setup(env.DB);
     if (request.method === "GET") {
-      const mode = new URL(request.url).searchParams.get("mode");
+      const params = new URL(request.url).searchParams;
+      if (params.get("catalog") === "1") {
+        // Each game configuration stores at most three entries. Return all
+        // recorded modes so custom configurations are discoverable as well.
+        const rows = await env.DB.prepare(
+          "SELECT mode,name,score FROM leaderboard ORDER BY mode ASC,score DESC,created_at ASC,id ASC LIMIT 1500"
+        ).all();
+        const grouped = new Map();
+        for (const entry of (rows.results || [])) {
+          if (!allowedMode(entry.mode)) continue;
+          if (!grouped.has(entry.mode)) grouped.set(entry.mode,[]);
+          if (grouped.get(entry.mode).length < 3)
+            grouped.get(entry.mode).push({name:entry.name,score:entry.score});
+        }
+        return reply({boards:Array.from(grouped,([mode,entries])=>({mode,entries}))});
+      }
+      const mode = params.get("mode");
       if (!allowedMode(mode)) return reply({error:"Invalid game mode"},400);
       const entries = await getBoard(env.DB,mode);
       return reply({entries: entries.map(({name,score})=>({name,score})), minimum:minimumScore(mode)});
