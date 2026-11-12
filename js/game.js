@@ -378,11 +378,9 @@
     closeSuggestions();
     feedback.textContent = "";
     if (challenge === "timeline") {
-      const picked = [];
-      for (let i = 0; i < 3; i++) {
-        const id = nextId();
-        if (id && !picked.includes(id)) picked.push(id);
-      }
+      // Choose three distinct episodes, including when a normal queue would
+      // cross a cycle boundary.
+      const picked = randomShuffle(episodePool().map(ep => ep.id)).slice(0, 3);
       if (picked.length < 3) { finishGame("Not enough episodes to play."); return; }
       currentRound = { id:picked[0], timeline:picked };
       timelineOrder = randomShuffle(picked.slice());
