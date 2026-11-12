@@ -156,7 +156,7 @@
   let choices = [], dailyAnswers = [], dailyGuesses = [], dailyPlan = [], awaitingNext = false;
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
-  let timelineDragging = null, timelineRevealed = false;
+  let timelineDragging = null, timelineRevealed = false, suppressTimelineClick = false;
 
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
@@ -773,6 +773,8 @@
     timelineRevealed=false;
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
+    timelineSubmit.textContent="Check order";
+    suppressTimelineClick=false;
     clearBoard();
     clearAnswerReveal();
     ++epoch;
@@ -1190,12 +1192,14 @@
           if(event.clientX>=rect.left&&event.clientX<=rect.right&&
              event.clientY>=rect.top&&event.clientY<=rect.bottom)destination=i;
         });
+        suppressTimelineClick=true;
         if(destination>=0)moveTimelineCard(timelineOrder.indexOf(id),destination);
       };
       card.addEventListener("pointerup",endDrag);
       card.addEventListener("pointercancel",()=>{timelineDragging=null;card.classList.remove("dragging");});
       // Accessible fallback: select a card, then the destination position.
       card.addEventListener("click",()=>{
+        if(suppressTimelineClick){suppressTimelineClick=false;return;}
         if(!timelineCanReorder()||timelineDragging)return;
         const position=timelineOrder.indexOf(id);
         if(timelineSelection<0){
@@ -1243,6 +1247,13 @@
   }
   timelineSubmit.addEventListener("click",()=>{
     if(gameOver||challenge!=="timeline")return;
+    if(timelineRevealed){
+      timelineSubmit.textContent="Check order";
+      timelineSubmit.disabled=false;
+      timelineSubmit.hidden=false;
+      createRound();
+      return;
+    }
     const correct=timelineSortedIds().every((id,i)=>id===timelineOrder[i]);
     answer(correct,correct?"":"The timeline was rearranged into the correct order.");
   });
@@ -1329,6 +1340,13 @@
       score += revealEnabled() ? (6 - revealStage) : 1;
       scoreEl.textContent = String(score);
       setHigh();
+      if (challenge === "timeline") {
+        revealTimelineInPlace(true);
+        timelineSubmit.hidden=false;
+        timelineSubmit.textContent="Next timeline →";
+        feedback.textContent="Correct! Score: "+score+". Review the order before continuing.";
+        return;
+      }
       if (challenge === "one110" && answered >= playable.length) {
         finishGame("Perfect! You recognized all " + playable.length + " episodes.");
         return;
