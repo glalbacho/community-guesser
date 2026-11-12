@@ -1587,6 +1587,22 @@
   });
   // Legacy standalone replay control is kept hidden for compatibility.
   restart.addEventListener("click", () => { if (challenge !== "daily") resetGame(); });
+  // Pressing Enter a second time after a wrong answer plays again, even
+  // if disabling the episode input moved focus to the page itself.
+  // Do not restart completed one-per-day puzzles or intercept other forms.
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Enter" || event.repeat || !gameOver ||
+        challenge === "daily" || challenge === "communityle" ||
+        event.altKey || event.ctrlKey || event.metaKey ||
+        menu.classList.contains("open") || activeView !== "game") return;
+    const target = event.target;
+    if (target && target.closest && target.closest(
+      "input:not(#episode-input), textarea, select, [contenteditable=true], a, button:not(#guess-btn):not(#timeline-submit)"
+    )) return;
+    if (challenge === "timeline" && (timelineSubmit.disabled || timelineSubmit.hidden)) return;
+    event.preventDefault();
+    resetGame();
+  });
   // First click only focuses the field. A subsequent click while it is
   // already focused explicitly opens the full episode picker.
   input.addEventListener("pointerdown", () => {
