@@ -1792,11 +1792,10 @@
         return;
       }
     }
-    const last = score;
-    score = 0;
-    scoreEl.textContent = "0";
+    // Keep the final streak visible on Game over. resetGame() clears it only
+    // when the player actually chooses Play again.
     let explanation = correction || (challenge === "timeline" ? "" : "Correct answer: " + label(byId[currentRound.id]));
-    finishGame("Game over! " + explanation + " · Final score: " + last + ".", last);
+    finishGame("Game over! " + explanation + " · Final score: " + score + ".", score);
   }
   function resolveInput() {
     const matches = search(input.value);
