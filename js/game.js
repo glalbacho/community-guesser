@@ -166,6 +166,7 @@
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
   let timelineDragging = null, timelineRevealed = false, timelineRevealVersion = 0;
+  let timelineMotionAnimations = [];
 
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
@@ -785,7 +786,11 @@
     timelineSubmit.textContent="Check order";
     ++timelineRevealVersion;
     timelineDragging=null;
-    timelineBoard.classList.remove("reordering");
+    timelineMotionAnimations.forEach(animation=>{
+      if(animation && animation.cancel)animation.cancel();
+    });
+    timelineMotionAnimations=[];
+    timelineBoard.classList.remove("reordering","solved","incorrect");
     clearBoard();
     clearAnswerReveal();
     ++epoch;
@@ -931,7 +936,18 @@
       const picked = randomShuffle(episodePool().map(ep => ep.id)).slice(0, 3);
       if (picked.length < 3) { finishGame("Not enough episodes to play."); return; }
       currentRound = { id:picked[0], timeline:picked };
-      timelineOrder = randomShuffle(picked.slice());
+      // Explicitly allow an already-correct sequence about 10% of the time.
+      const chronological = picked.slice().sort((a,b) =>
+        episodes.findIndex(ep=>ep.id===a)-episodes.findIndex(ep=>ep.id===b));
+      if (Math.random() < 0.10) {
+        timelineOrder = chronological;
+      } else {
+        timelineOrder = randomShuffle(picked.slice());
+        // The remaining 90% should actually require reordering.
+        if (timelineOrder.every((id,i)=>id===chronological[i])) {
+          [timelineOrder[0],timelineOrder[1]]=[timelineOrder[1],timelineOrder[0]];
+        }
+      }
       renderTimeline();
       updateProgress();
       return;
@@ -1119,18 +1135,29 @@
         window.matchMedia("(prefers-reduced-motion: reduce)").matches) return 0;
     return timelineDurations[timelineSpeed] || timelineDurations.slow;
   }
-  function animateTimelineOrder(ordered,animate=true) {
-    const oldRects=new Map();
-    if(animate)Array.from(timelineCards.children).forEach(card=>{
+  function animateTimelineOrder(ordered,animate=true,fromRects=null) {
+    // FLIP: capture *visual* positions, including a card under the pointer.
+    // This avoids a flash back to the old grid position on pointer release.
+    const oldRects=fromRects || new Map();
+    if(animate && !fromRects)Array.from(timelineCards.children).forEach(card=>{
       if(card.dataset && card.getBoundingClientRect)
         oldRects.set(card.dataset.episode,card.getBoundingClientRect());
     });
+    // Cancel any previous transition only after capturing the displayed
+    // positions, so rapid successive drags continue smoothly.
+    timelineMotionAnimations.forEach(animation=>{
+      if(animation && animation.cancel)animation.cancel();
+    });
+    timelineMotionAnimations=[];
     timelineOrder=ordered.slice();
     const nodes=new Map(Array.from(timelineCards.children).map(el=>[el.dataset.episode,el]));
     for(const id of timelineOrder) {
       const card=nodes.get(id);
       if(card)timelineCards.appendChild(card);
     }
+    // Clear the pointer transform only *after* recording the visual rectangle
+    // and reflowing into the destination slot, then animate the difference.
+    Array.from(timelineCards.children).forEach(card=>{card.style.transform="";});
     const duration=animate?timelineAnimationDuration():0;
     const animations=[];
     if(duration>0)Array.from(timelineCards.children).forEach(card=>{
@@ -1141,8 +1168,11 @@
       if(Math.abs(dx)+Math.abs(dy)<2)return;
       const animation=card.animate(
         [{transform:"translate("+dx+"px,"+dy+"px)"},{transform:"translate(0,0)"}],
-        {duration,easing:"cubic-bezier(.25,.75,.3,1)"});
-      if(animation && animation.finished)animations.push(animation.finished.catch(()=>{}));
+        {duration,easing:"cubic-bezier(.22,.72,.32,1)"});
+      if(animation){
+        timelineMotionAnimations.push(animation);
+        if(animation.finished)animations.push(animation.finished.catch(()=>{}));
+      }
     });
     if(!timelineRevealed)Array.from(timelineCards.children).forEach((card,i)=>{
       const caption=card.querySelector(".timeline-handle");
@@ -1151,18 +1181,22 @@
     });
     return Promise.all(animations);
   }
-  function moveTimelineCard(from,to) {
-    if(!timelineCanReorder()||from===to||from<0||to<0||
+  function moveTimelineCard(from,to,fromRects=null) {
+    if(!timelineCanReorder()||from<0||to<0||
        from>=timelineOrder.length||to>=timelineOrder.length)return;
     const order=timelineOrder.slice();
-    const [moved]=order.splice(from,1);
-    order.splice(to,0,moved);
+    if(from!==to){
+      const [moved]=order.splice(from,1);
+      order.splice(to,0,moved);
+    }
     timelineSelection=-1;
-    animateTimelineOrder(order,true);
+    // Animate even when dropped on the same slot: the dragged card should
+    // settle from its release position rather than snap backward.
+    animateTimelineOrder(order,true,fromRects);
   }
-  function cancelTimelineDrag(card) {
+  function cancelTimelineDrag(card,preserveTransform=false) {
     if(!timelineDragging || timelineDragging.card!==card)return;
-    card.style.transform="";
+    if(!preserveTransform)card.style.transform="";
     card.classList.remove("dragging");
     Array.from(timelineCards.children).forEach(el=>el.classList.remove("drag-over"));
     timelineDragging=null;
@@ -1172,8 +1206,7 @@
     timelineRevealed=false;
     timelineDragging=null;
     timelineInstruction.textContent="Drag any part of a card into broadcast order, then release it over another position.";
-    timelineBoard.classList.remove("solved");
-    timelineBoard.classList.remove("reordering");
+    timelineBoard.classList.remove("solved","incorrect","reordering");
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
     timelineSubmit.textContent="Check order";
@@ -1236,8 +1269,16 @@
         const position=drag.rects.findIndex(r=>
           event.clientX>=r.left&&event.clientX<=r.right&&
           event.clientY>=r.top&&event.clientY<=r.bottom);
-        cancelTimelineDrag(card);
-        if(active&&position>=0)moveTimelineCard(from,position);
+        if(active) {
+          // Read all cards before clearing the pointer transform. The dragged
+          // card's rectangle now reflects exactly where it was released.
+          const releaseRects=new Map(Array.from(timelineCards.children).map(node=>
+            [node.dataset.episode,node.getBoundingClientRect()]));
+          cancelTimelineDrag(card,true);
+          moveTimelineCard(from,position>=0?position:from,releaseRects);
+        } else {
+          cancelTimelineDrag(card);
+        }
       });
       card.addEventListener("pointercancel",()=>cancelTimelineDrag(card));
       // Keyboard accessibility without accidental click-to-select behavior.
@@ -1260,29 +1301,44 @@
     const actual=timelineSortedIds();
     const needsReorder=!actual.every((id,i)=>id===timelineOrder[i]);
     timelineSubmit.disabled=true;
+    timelineBoard.classList.remove("solved","incorrect");
     if(needsReorder) {
       timelineBoard.classList.add("reordering");
-      timelineInstruction.textContent="Reordering the cards into the correct timeline…";
-      // Wait for every card to finish moving. Reveal titles/colors *afterward*.
+      timelineInstruction.textContent="Moving the cards into the correct broadcast order…";
+      // First let every card reach its proper position.
       await animateTimelineOrder(actual,true);
     }
     if(version!==timelineRevealVersion||challenge!=="timeline")return;
     timelineBoard.classList.remove("reordering");
-    timelineBoard.classList.add("solved");
     timelineInstruction.textContent=correct
       ?"Perfect! You placed the episodes in the correct order."
-      :"Here's the correct broadcast order.";
-    Array.from(timelineCards.children).forEach((card,i)=>{
-      card.classList.add("is-solved");
+      :"This was the correct broadcast order.";
+    const popDuration=timelineAnimationDuration()===0?0:
+      Math.max(130,Math.min(360,Math.round(timelineAnimationDuration()*.27)));
+    // Show one answer at a time, deliberately left-to-right, only after
+    // the positions have settled. Wrong answers turn red, never green.
+    for(let i=0;i<timelineCards.children.length;i++) {
+      if(version!==timelineRevealVersion||challenge!=="timeline")return;
+      const card=timelineCards.children[i];
       card.disabled=true;
       card.setAttribute("aria-label","Position "+(i+1)+": "+label(byId[actual[i]]));
       const caption=card.querySelector(".timeline-handle");
-      if(caption){
+      if(caption) {
         caption.className="timeline-answer";
         caption.textContent=label(byId[actual[i]]);
       }
-    });
-    if(correct){
+      card.classList.add(correct?"is-solved":"is-incorrect");
+      if(caption && popDuration>0 && caption.animate){
+        const animation=caption.animate([
+          {opacity:0,transform:"translateY(15px) scale(.87)"},
+          {opacity:1,transform:"translateY(0) scale(1)"}
+        ],{duration:popDuration,easing:"cubic-bezier(.2,1.4,.35,1)",fill:"both"});
+        if(animation && animation.finished)await animation.finished.catch(()=>{});
+      }
+    }
+    if(version!==timelineRevealVersion||challenge!=="timeline")return;
+    timelineBoard.classList.add(correct?"solved":"incorrect");
+    if(correct) {
       timelineSubmit.hidden=false;
       timelineSubmit.disabled=false;
       timelineSubmit.textContent="Next timeline →";
