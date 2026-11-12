@@ -176,6 +176,7 @@
   let pending = [], previousId = "", selected = null, highlighted = -1, visible = [];
   let currentFrame = 0, revealStage = 1, timelineSelection = -1, timelineOrder = [];
   let choices = [], dailyAnswers = [], dailyGuesses = [], dailyPlan = [], awaitingNext = false;
+  let showUnmodifiedAnswer = false;
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
   let timelineDragging = null, timelineRevealed = false, timelineRevealVersion = 0;
@@ -1034,7 +1035,8 @@
     pending = [];
     previousId = "";
     score = 0; answered = 0; lives = challenge === "custom" ? customLives : 3; gameOver = false;
-    awaitingNext = false; selected = null; highlighted = -1; visible = [];
+    awaitingNext = false; showUnmodifiedAnswer = false;
+    selected = null; highlighted = -1; visible = [];
     currentFrame = 0; revealStage = 1; timelineSelection = -1;
     input.value = ""; input.disabled = false; button.disabled = false;
     button.textContent = "Guess"; button.hidden = false;
@@ -1170,8 +1172,11 @@
   function createRound() {
     if (gameOver) return;
     currentFrame = 0; revealStage = 1; selected = null;
-    timelineSelection = -1; awaitingNext = false;
+    timelineSelection = -1; awaitingNext = false; showUnmodifiedAnswer = false;
     input.value = ""; input.disabled = false; button.disabled = false; button.hidden = false; button.textContent = "Guess";
+    textAnswer.classList.remove("replay-only");
+    if (fourEnabled()) { fourChoices.hidden = false; textAnswer.hidden = true; }
+    else if (challenge !== "timeline") { fourChoices.hidden = true; textAnswer.hidden = false; }
     closeSuggestions();
     // Only a list explicitly opened by the player persists across rounds.
     // Simply focusing the input or typing a search never enables this.
@@ -1234,7 +1239,7 @@
     progressDetail.textContent = message;
     if (revealEnabled()) {
       revealLabel.textContent = "Reveal " + revealStage + " / 5 · " + (6-revealStage) + " points";
-      revealNext.disabled = revealStage === 5;
+      revealNext.disabled = revealStage === 5 || awaitingNext || gameOver;
     }
   }
   function displayFrame() {
@@ -1256,7 +1261,14 @@
       });
       return;
     }
-    if (distortedEnabled() && !revealEnabled()) {
+    if (showUnmodifiedAnswer) {
+      // Show the real source image in the current viewer, never a recap copy.
+      // This bypasses all temporary pixelation, hue changes and transforms.
+      frame.img.style.filter = "";
+      frame.img.style.transform = "";
+      frame.img.style.imageRendering = "auto";
+      imageBox.replaceChildren(frame.img);
+    } else if (distortedEnabled() && !revealEnabled()) {
       try {
         const canvas = document.createElement("canvas");
         const resolution = frame.pixelResolution;
@@ -1278,14 +1290,12 @@
         imageBox.replaceChildren(frame.img);
       }
     } else if (challenge === "communityle" && !communityleDone()) {
-      // Deliberately extreme on guess 1: small resolution, strong blur and
-      // heavy colour shift. Each wrong guess increases detail and clarity.
+      // Blur/pixelation grows clearer with each guess, but original colours
+      // stay unchanged so visual clues remain fair in Community-le.
       const stage = communityleHistory.length;
       const resolutions = [9, 15, 26, 46, 90, 180];
       const blurs = [25, 18, 12, 8, 4, 1];
-      const shifts = [155, 120, 80, 45, 20, 0];
       const stageWidth = resolutions[stage] || resolutions[5];
-      const pixelHue = shifts[stage] || 0;
       try {
         const canvas = document.createElement("canvas");
         const ratio = (frame.img.naturalHeight || 9) / (frame.img.naturalWidth || 16);
@@ -1296,12 +1306,12 @@
         context.imageSmoothingEnabled = false;
         context.drawImage(frame.img, 0, 0, canvas.width, canvas.height);
         canvas.style.cssText = "width:100%;height:100%;object-fit:contain;image-rendering:pixelated";
-        canvas.style.filter = "blur(" + blurs[stage] + "px) hue-rotate(" + pixelHue + "deg) saturate(" + (1.7 - stage*.13) + ") contrast(" + (1.5-stage*.08) + ")";
+        canvas.style.filter = "blur(" + blurs[stage] + "px)";
         canvas.setAttribute("role", "img");
         canvas.setAttribute("aria-label", "Daily Community-le distorted screenshot, attempt " + (stage+1));
         imageBox.replaceChildren(canvas);
       } catch (_) {
-        frame.img.style.filter = "blur(" + blurs[stage] + "px) hue-rotate(" + pixelHue + "deg)";
+        frame.img.style.filter = "blur(" + blurs[stage] + "px)";
         imageBox.replaceChildren(frame.img);
       }
     } else if (revealEnabled() && revealStage < 5) {
@@ -1351,7 +1361,7 @@
   previousFrameButton.addEventListener("click", () => moveFrame(-1));
   nextFrameButton.addEventListener("click", () => moveFrame(1));
   revealNext.addEventListener("click", () => {
-    if (!revealEnabled() || gameOver || revealStage >= 5) return;
+    if (!revealEnabled() || gameOver || awaitingNext || revealStage >= 5) return;
     revealStage++;
     displayFrame();
   });
@@ -1620,10 +1630,11 @@
   });
   function finishGame(message, finalScore = score) {
     gameOver = true;
-    // Progressive Reveal: show the original unpixelated screenshot in the
-    // existing viewer when the player loses, without adding a second image.
-    if (challenge === "progressive" && message.startsWith("Game over")) {
-      revealStage = 5;
+    // On a loss, restore the original in the existing viewer for every
+    // mode with distortion (including Progressive Reveal and custom mixes).
+    if (message.startsWith("Game over") && (revealEnabled() || distortedEnabled())) {
+      showUnmodifiedAnswer = true;
+      if(revealEnabled())revealStage = 5;
       displayFrame();
     }
     input.disabled = true;
@@ -1673,7 +1684,29 @@
   function advance() {
     if (gameOver) return;
     awaitingNext = false;
+    showUnmodifiedAnswer = false;
     createRound();
+  }
+  function pauseAfterWrongAnswer(message) {
+    awaitingNext = true;
+    showUnmodifiedAnswer = true;
+    input.disabled = true;
+    closeSuggestions();
+    if (revealEnabled()) revealStage = 5;
+    displayFrame();
+    // Reuse the existing Guess button for Next, including custom Four Choices.
+    if (fourEnabled()) {
+      fourChoices.hidden = true;
+      textAnswer.hidden = false;
+    }
+    textAnswer.classList.add("replay-only");
+    button.hidden = false;
+    button.disabled = false;
+    button.textContent = "Next →";
+    feedback.classList.add("is-wrong");
+    feedback.classList.remove("is-correct");
+    feedback.textContent = message;
+    updateProgress();
   }
   function answer(value, correction = "") {
     if (refreshDailyAtBoundary()) return;
@@ -1716,8 +1749,12 @@
       scoreEl.textContent = String(score);
       if (answered >= 5) { finishDaily(); return; }
       const last = currentRound.id;
-      createRound();
-      feedback.textContent = correct ? "Correct! Next screenshot." : "Answer: " + label(byId[last]) + ". Next screenshot.";
+      if (!correct) {
+        pauseAfterWrongAnswer("Wrong! Correct answer: " + label(byId[last]) + ".");
+      } else {
+        createRound();
+        feedback.textContent = "Correct! Next screenshot.";
+      }
       return;
     }
     if (correct) {
@@ -1747,10 +1784,8 @@
     if (challenge === "survival" || challenge === "custom") {
       lives--;
       if (lives > 0) {
-        const last = currentRound.id;
-        advance();
-        updateProgress();
-        feedback.textContent = "Wrong! " + label(byId[last]) + ". " + lives + " lives left.";
+        pauseAfterWrongAnswer("Wrong! Correct answer: " + label(byId[currentRound.id]) +
+          ". " + lives + " " + (lives === 1 ? "life" : "lives") + " left.");
         return;
       }
     }
@@ -1773,24 +1808,30 @@
   form.addEventListener("submit", event => {
     event.preventDefault();
     if(refreshDailyAtBoundary())return;
+    if (awaitingNext) { advance(); return; }
     if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(); return; }
     if (fourEnabled() || challenge === "timeline" || gameOver) return;
     resolveInput();
   });
   // Legacy standalone replay control is kept hidden for compatibility.
   restart.addEventListener("click", () => { if (challenge !== "daily") resetGame(); });
-  // Pressing Enter a second time after a wrong answer plays again, even
-  // if disabling the episode input moved focus to the page itself.
-  // Do not restart completed one-per-day puzzles or intercept other forms.
+  // Enter activates Next after a wrong round or Play again after a loss,
+  // even if the disabled answer input caused keyboard focus to move away.
   document.addEventListener("keydown", event => {
-    if (event.key !== "Enter" || event.repeat || !gameOver ||
-        challenge === "daily" || challenge === "communityle" ||
+    if (event.key !== "Enter" || event.repeat || (!gameOver && !awaitingNext) ||
+        challenge === "communityle" ||
         event.altKey || event.ctrlKey || event.metaKey ||
         menu.classList.contains("open") || activeView !== "game") return;
     const target = event.target;
     if (target && target.closest && target.closest(
       "input:not(#episode-input), textarea, select, [contenteditable=true], a, button:not(#guess-btn):not(#timeline-submit)"
     )) return;
+    if (awaitingNext) {
+      event.preventDefault();
+      advance();
+      return;
+    }
+    if (challenge === "daily") return;
     if (challenge === "timeline" && (timelineSubmit.disabled || timelineSubmit.hidden)) return;
     event.preventDefault();
     resetGame();
