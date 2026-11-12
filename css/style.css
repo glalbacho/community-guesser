@@ -298,8 +298,3 @@ button,select,input{font-family:inherit}
 .communityle-hint-key span{min-width:31px;text-align:center}
 @media(max-width:600px){.communityle-hint-block{width:23px;height:25px;font-size:20px}.communityle-two-hints{gap:4px}.communityle-hint-key{gap:5px}}
 
-/* Hand-drawn Community emblem, cropped tightly from the approved artwork. */
-.site-brand{display:flex;align-items:center;justify-content:center;gap:14px;min-height:88px}
-.site-emblem{display:block;width:clamp(150px,25vw,216px);height:auto;max-height:100px;object-fit:contain;border-radius:3px;flex-shrink:0}
-.site-brand h1{font-size:clamp(21px,2.7vw,27px);text-align:left;line-height:1.16;max-width:220px}
-@media(max-width:560px){.site-brand{gap:8px;padding-left:30px;min-height:70px}.site-emblem{width:clamp(120px,38vw,165px)}.site-brand h1{font-size:clamp(17px,5vw,21px)}}
