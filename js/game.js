@@ -734,15 +734,27 @@
   // Hash routes survive reloads and work on static Cloudflare/GitHub hosting.
   // Examples: #/daily, #/season/3, #/classic/hard, #/options.
   function gameRoute() {
-    if(challenge==="classic")return "/classic/"+mode;
+    // Classic is the homepage; its difficulty is already saved in localStorage.
+    if(challenge==="classic")return "";
     if(challenge==="season")return "/season/"+season;
     return "/"+challenge;
   }
   function setRoute(route) {
-    const hash="#"+route;
+    if(!window.location)return;
+    const currentHash=window.location.hash || "";
+    const targetHash=route?"#"+route:"";
+    if(currentHash===targetHash)return;
+    // The bare page URL is Classic. Other modes use hash routes because
+    // static hosting serves the same HTML on reload without rewrite rules.
     if(typeof window.history?.pushState==="function") {
-      window.history.pushState(null,"",hash);
-    }else if(window.location)window.location.hash=hash;
+      const base=(window.location.pathname || "/")+(window.location.search || "");
+      window.history.pushState(null,"",base+targetHash);
+    }else if(route){
+      window.location.hash=targetHash;
+    }else{
+      // Fallback for environments without the History API.
+      window.location.hash="";
+    }
   }
   function navigateTo(view) {
     activeView=view;
@@ -764,7 +776,10 @@
       return;
     }
     if(name==="classic"&&["easy","normal","hard","impossible"].includes(parts[1])){
+      // One-time migration from old #/classic/easy URLs to the homepage.
       mode=parts[1];modeSelect.value=mode;
+      try{localStorage.setItem(modeKey,mode);}catch(_){}
+      setRoute("");
     }
     if(name==="season"&&/^[1-6]$/.test(parts[1]))season=Number(parts[1]);
     if(challengeNames[name] && name!=="classic")challenge=name;
@@ -1140,6 +1155,13 @@
     if (next < 0 || next >= currentRound.frames.length) return;
     currentFrame = next; displayFrame();
   }
+  // When entering text, pointer-clicking the image arrows should not steal
+  // keyboard focus from the answer field.
+  [previousFrameButton,nextFrameButton].forEach(arrow=>{
+    arrow.addEventListener("pointerdown",event=>{
+      if(threeEnabled() && document.activeElement===input)event.preventDefault();
+    });
+  });
   previousFrameButton.addEventListener("click", () => moveFrame(-1));
   nextFrameButton.addEventListener("click", () => moveFrame(1));
   revealNext.addEventListener("click", () => {
@@ -1149,12 +1171,16 @@
   });
   document.addEventListener("keydown", event => {
     if (event.altKey || event.ctrlKey || event.metaKey || menu.classList.contains("open")) return;
-    if (event.target.closest("input, textarea, select, [contenteditable=true]")) return;
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      if (threeEnabled()) {
-        event.preventDefault(); moveFrame(event.key === "ArrowRight" ? 1 : -1);
-      }
-    }
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    if (!threeEnabled() || !currentRound || gameOver) return;
+    // Left/right browse screenshots even while the answer input is focused.
+    // The input text, selected episode and suggestions are left untouched.
+    const target=event.target;
+    if(target && target.closest &&
+       target.closest("textarea, select, [contenteditable=true]"))return;
+    if(target && target.closest && target.closest("input") && target!==input)return;
+    event.preventDefault();
+    moveFrame(event.key === "ArrowRight" ? 1 : -1);
   });
   function buildChoices() {
     const right = currentRound.id;
