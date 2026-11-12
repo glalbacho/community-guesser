@@ -1620,6 +1620,12 @@
   });
   function finishGame(message, finalScore = score) {
     gameOver = true;
+    // Progressive Reveal: show the original unpixelated screenshot in the
+    // existing viewer when the player loses, without adding a second image.
+    if (challenge === "progressive" && message.startsWith("Game over")) {
+      revealStage = 5;
+      displayFrame();
+    }
     input.disabled = true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     timelineSubmit.disabled = true;
