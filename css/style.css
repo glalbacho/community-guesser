@@ -76,3 +76,25 @@ button,select,input{font-family:inherit}
 .frame-viewer .placeholder canvas{max-width:100%;max-height:100%;display:block;image-rendering:pixelated}
 @media(min-width:1100px){.menu-toggle{left:24px;top:22px}}
 @media(max-width:600px){.menu-toggle{top:9px;left:9px;width:40px;height:40px;font-size:21px}.game header{padding-left:48px;padding-right:48px}.four-choices{grid-template-columns:1fr}.timeline-cards{gap:6px}.timeline-card{padding:4px;border-radius:8px}.timeline-card span{font-size:10px}.challenge-menu{width:min(340px,93vw)}}
+
+/* Custom Game setup and optional compact autocomplete. */
+.sidebar-options{margin:18px 0 0;width:100%;background:transparent;border:1px solid #535768;border-radius:11px;padding:13px 14px;color:#dfe5f3;text-align:left;font-size:15px;font-weight:600;cursor:pointer}
+.sidebar-options:hover{background:#353b4b}
+.options-panel{padding:13px 8px 4px}.options-panel h3{font-size:15px;margin:0 0 12px;color:#eef1f7}
+.option-toggle{display:flex;align-items:flex-start;gap:11px;margin:12px 0;cursor:pointer;color:#e3e5ea}
+.option-toggle input{width:18px;height:18px;accent-color:#82b7ff;flex-shrink:0;margin:2px 0 0}
+.option-toggle span{display:flex;flex-direction:column;gap:4px}.option-toggle strong{font-size:13px}.option-toggle small{font-size:12px;line-height:1.4;color:#b8becc}
+.custom-setup{width:min(100%,520px);margin:16px auto 18px;padding:23px 25px;border:1px solid #4a5265;border-radius:15px;background:#252932;text-align:left;box-shadow:0 12px 34px #0003}
+.custom-setup h2{margin:0 0 22px;font-size:22px}
+.custom-field label{display:flex;justify-content:space-between;font-size:16px;font-weight:600}
+#custom-lives-display{font-size:24px;font-variant-numeric:tabular-nums;color:#b2d3ff}
+#custom-lives{width:100%;accent-color:#84b6ff;margin-top:14px}
+.custom-range-labels{display:flex;justify-content:space-between;color:#abb2c0;font-size:12px;margin:3px 0 20px}
+.custom-seasons{border:0;padding:0;margin:0}.custom-seasons legend{font-size:16px;font-weight:600;margin-bottom:12px}
+.custom-seasons{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.custom-seasons legend{grid-column:1/-1}
+.custom-seasons label{display:flex;align-items:center;gap:7px;padding:11px 9px;background:#333845;border:1px solid #515b6e;border-radius:9px;cursor:pointer;font-size:13px}
+.custom-seasons input{accent-color:#82b7ff;width:17px;height:17px}
+.custom-error{color:#f4a7a7;font-size:13px}
+.custom-actions{margin:22px 0 0;text-align:center}.custom-actions .primary-action{width:100%;font-size:16px}
+@media(max-width:600px){.custom-setup{padding:17px 15px}.custom-seasons{grid-template-columns:repeat(2,1fr)}}
