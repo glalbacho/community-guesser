@@ -28,6 +28,7 @@
         <div class="challenge-divider" role="separator"><span>MAKE IT YOUR OWN</span><small>Or build a game with your own rules.</small></div>
         <button type="button" data-challenge="custom" class="challenge-link custom-menu-link"><span>+ Custom Game</span><small>Choose seasons and 1–10 lives</small></button>
       </nav>
+      <button type="button" id="show-all-highscores" class="sidebar-options highscores-nav">🏆 &nbsp; All High Scores</button>
       <button type="button" id="open-options" class="sidebar-options" aria-expanded="false" aria-controls="options-panel">⚙ &nbsp; Options</button>
       <section id="options-panel" class="options-panel" hidden aria-label="Game options">
         <h3>Game options</h3>
@@ -96,7 +97,12 @@
         <span id="reveal-label">Reveal 1 / 5</span><button type="button" id="reveal-next">Reveal more <span aria-hidden="true">›</span></button>
       </div>
       <section class="timeline-board" id="timeline-board" aria-label="Place screenshots in episode order" hidden>
-        <p>Tap two pictures to swap them. Arrange from earliest to latest episode.</p>
+        <div class="timeline-instructions">
+          <span class="timeline-label">EARLIEST</span>
+          <p id="timeline-instruction">Drag the images into broadcast order. On mobile, hold and move a card.</p>
+          <span class="timeline-label">LATEST</span>
+        </div>
+        <div class="timeline-track" aria-hidden="true"><span>1</span><span>2</span><span>3</span></div>
         <div class="timeline-cards" id="timeline-cards"></div>
         <button type="button" id="timeline-submit" class="primary-action">Check order</button>
       </section>
@@ -139,6 +145,17 @@
           <ol id="leaderboard-list" class="leaderboard-list" hidden></ol>
         </section>
     </main>
+    <section id="highscores-view" class="highscores-view" aria-label="All website high scores" hidden>
+      <div class="highscores-view-top">
+        <button type="button" id="highscores-back" class="highscores-back">← Back to game</button>
+        <span class="highscores-overline">COMMUNITY GUESSER</span>
+        <h2>Hall of Fame</h2>
+        <p>Website-wide Top 3 for every game mode. Daily boards reset by date; custom configurations have separate rankings.</p>
+      </div>
+      <p id="highscores-status" class="highscores-status" role="status" aria-live="polite"></p>
+      <div id="highscores-grid" class="highscores-grid"></div>
+      <button type="button" id="highscores-refresh" class="highscores-refresh">Refresh rankings</button>
+    </section>
   </div>
   <script src="js/episodes.js"></script>
   <script src="js/images.js"></script>
