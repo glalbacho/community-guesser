@@ -360,7 +360,9 @@
       img.style.filter = looks[Math.floor(Math.random() * looks.length)];
       img.style.transform = "translate(" + dx + "%," + dy + "%) scale(" + zoom + ") rotate(" + rotation + "deg)";
     }
-    const frame = {img, status:"loading", ready:null};
+    const frame = {img, status:"loading", ready:null,
+      pixelResolution: challenge === "classic" && mode === "impossible"
+        ? 28 + Math.floor(Math.random() * 108) : null};
     frame.ready = new Promise(resolve => {
       img.onload = () => { frame.status = "ready"; resolve(); };
       img.onerror = () => { frame.status = "error"; resolve(); };
@@ -406,7 +408,7 @@
   }
   function updateProgress() {
     let message = "";
-    if (challenge === "survival") message = "Lives: " + "♥ ".repeat(lives).trim() + " · " + score + " correct";
+    if (challenge === "survival") message = "Lives: " + lives + " / 3 · " + score + " correct";
     if (challenge === "one110") message = (answered + 1) + " / " + playable.length + " episodes";
     if (challenge === "daily") message = dailyDate() + " (UTC) · " + (answered + 1) + " / 5";
     if (challenge === "season") message = episodePool().length + " episodes in this season";
@@ -435,7 +437,28 @@
       });
       return;
     }
-    if (challenge === "progressive" && revealStage < 5) {
+    if (challenge === "classic" && mode === "impossible") {
+      try {
+        const canvas = document.createElement("canvas");
+        const resolution = frame.pixelResolution;
+        const ratio = (frame.img.naturalHeight || 9) / (frame.img.naturalWidth || 16);
+        canvas.width = resolution;
+        canvas.height = Math.max(1, Math.round(resolution * ratio));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas unavailable");
+        context.imageSmoothingEnabled = false;
+        context.drawImage(frame.img, 0, 0, canvas.width, canvas.height);
+        canvas.style.cssText = "width:100%;height:100%;object-fit:contain;image-rendering:pixelated";
+        canvas.style.filter = frame.img.style.filter;
+        canvas.style.transform = frame.img.style.transform;
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", "Distorted pixelated Community screenshot");
+        imageBox.replaceChildren(canvas);
+      } catch (_) {
+        frame.img.style.imageRendering = "pixelated";
+        imageBox.replaceChildren(frame.img);
+      }
+    } else if (challenge === "progressive" && revealStage < 5) {
       // Canvas changes only the browser rendering, never the source WebP file.
       try {
         const canvas = document.createElement("canvas");
