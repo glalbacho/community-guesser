@@ -394,6 +394,36 @@
     return !!communityleSolution && (
       communityleHistory.includes(communityleSolution.id) || communityleHistory.length >= 6);
   }
+  // Wordle's two-pass matching: exact locations first, then only the
+  // remaining unmatched numbers may count as a misplaced match.
+  // Index 0 = season; index 1 = episode number.
+  function communityleHint(id) {
+    if(!byId[id] || !communityleSolution || !byId[communityleSolution.id])
+      return ["absent","absent"];
+    const guess=[seasonNumber(byId[id]),episodeNumber(byId[id])];
+    const target=[seasonNumber(byId[communityleSolution.id]),
+      episodeNumber(byId[communityleSolution.id])];
+    const result=["absent","absent"];
+    const available=target.slice();
+    for(let i=0;i<2;i++){
+      if(guess[i]===target[i]){
+        result[i]="correct";
+        available[i]=null;
+      }
+    }
+    for(let i=0;i<2;i++){
+      if(result[i]==="correct")continue;
+      const j=available.indexOf(guess[i]);
+      if(j!==-1){result[i]="present";available[j]=null;}
+    }
+    return result;
+  }
+  const communityleEmoji = state => state==="correct"?"🟩":
+    state==="present"?"🟨":"⬛";
+  function communityleHintDescription(state) {
+    return state==="correct"?"correct position":
+      state==="present"?"number in the other position":"number not found";
+  }
   function renderCommunityle() {
     communityleDate.textContent = dailyDate() + " · resets 06:00 Berlin";
     communityleAttempts.textContent = communityleHistory.length + " / 6 guesses";
@@ -404,24 +434,30 @@
       const name = document.createElement("span");
       name.className = "guess-name";
       const hint = document.createElement("span");
-      hint.className = "guess-hint";
+      hint.className = "communityle-two-hints";
+      hint.setAttribute("aria-label","Season then episode number");
       const id = communityleHistory[i];
-      if (id && byId[id]) {
-        name.textContent = (i + 1) + ". " + label(byId[id]);
-        if (id === communityleSolution.id) {
-          row.classList.add("exact");
-          hint.textContent = "CORRECT";
-        } else if (seasonNumber(byId[id]) === seasonNumber(byId[communityleSolution.id])) {
-          row.classList.add("same-season");
-          hint.textContent = "RIGHT SEASON";
-        } else {
-          row.classList.add("wrong-season");
-          hint.textContent = "WRONG SEASON";
-        }
-      } else {
+      name.textContent = id && byId[id] ? (i + 1) + ". " + label(byId[id])
+        : (i + 1) + ". —";
+      if(id && byId[id]){
+        const states=communityleHint(id);
+        states.forEach((state,j)=>{
+          const block=document.createElement("span");
+          block.className="communityle-hint-block "+state;
+          block.textContent=communityleEmoji(state);
+          block.setAttribute("aria-label",
+            (j===0?"Season":"Episode number")+": "+communityleHintDescription(state));
+          block.title=(j===0?"Season":"Episode number")+": "+communityleHintDescription(state);
+          hint.appendChild(block);
+        });
+      }else{
         row.classList.add("empty");
-        name.textContent = (i + 1) + ". —";
-        hint.textContent = "";
+        for(let j=0;j<2;j++){
+          const block=document.createElement("span");
+          block.className="communityle-hint-block pending";
+          block.textContent="—";
+          hint.appendChild(block);
+        }
       }
       row.appendChild(name);
       row.appendChild(hint);
@@ -438,12 +474,8 @@
   }
   function communityleResultRows() {
     if (!communityleSolution) return [];
-    return communityleHistory.map(id => {
-      if(id===communityleSolution.id)return "🟩".repeat(5);
-      if(byId[id] && seasonNumber(byId[id])===seasonNumber(byId[communityleSolution.id]))
-        return "🟨".repeat(5);
-      return "⬛".repeat(5);
-    });
+    return communityleHistory.map(id=>communityleHint(id)
+      .map(communityleEmoji).join(""));
   }
   function communityleShareText() {
     const won=communityleHistory.includes(communityleSolution.id);
@@ -473,9 +505,10 @@
     communityleResultRows().forEach((line,i)=>{
       const row=document.createElement("div");
       row.textContent=line;
-      row.setAttribute("aria-label","Guess "+(i+1)+": "+
-        (line.startsWith("🟩")?"Correct episode":
-          line.startsWith("🟨")?"Correct season":"Wrong season"));
+      const states=communityleHint(communityleHistory[i]);
+      row.setAttribute("aria-label","Guess "+(i+1)+": season "+
+        communityleHintDescription(states[0])+", episode number "+
+        communityleHintDescription(states[1]));
       communityleResultGrid.appendChild(row);
     });
     communityleResultStatus.textContent="";
@@ -1656,9 +1689,14 @@
         return;
       }
       displayFrame();
-      feedback.textContent = seasonNumber(byId[value]) === seasonNumber(byId[communityleSolution.id])
-        ? "Right season! The picture is clearer now."
-        : "Wrong season. The picture is clearer now.";
+      const hints=communityleHint(value);
+      const summary=(hints[0]==="correct"?"Season correct. ":
+        hints[0]==="present"?"Season number belongs in the episode position. ":
+        "Season number absent. ")+
+        (hints[1]==="correct"?"Episode number correct. ":
+          hints[1]==="present"?"Episode number belongs in the season position. ":
+          "Episode number absent. ");
+      feedback.textContent=summary+"The picture is clearer now.";
       if (autoFocusInput) input.focus();
       return;
     }
