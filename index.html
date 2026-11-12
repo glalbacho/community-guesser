@@ -29,19 +29,8 @@
         <button type="button" data-challenge="custom" class="challenge-link custom-menu-link"><span>+ Custom Game</span><small>Choose seasons and 1–10 lives</small></button>
       </nav>
       <button type="button" id="show-all-highscores" class="sidebar-options highscores-nav">🏆 &nbsp; All High Scores</button>
-      <button type="button" id="open-options" class="sidebar-options" aria-expanded="false" aria-controls="options-panel">⚙ &nbsp; Options</button>
-      <section id="options-panel" class="options-panel" hidden aria-label="Game options">
-        <h3>Game options</h3>
-        <label class="option-toggle"><input id="option-show-on-focus" type="checkbox" checked><span><strong>Show all episodes on focus</strong><small>Turn off to show suggestions only after typing.</small></span></label>
-        <label class="option-toggle"><input id="option-auto-focus" type="checkbox"><span><strong>Focus input after correct guess</strong><small>Useful for fast keyboard play.</small></span></label>
-        <label class="timeline-speed-setting" for="option-timeline-speed"><span><strong>Timeline animation speed</strong><small>Choose how quickly the cards reorder and reveal the answer.</small></span>
-          <select id="option-timeline-speed">
-            <option value="fast">Fast (0.3 s)</option>
-            <option value="normal">Normal (0.7 s)</option>
-            <option value="slow" selected>Slow (1.3 s)</option>
-          </select>
-        </label>
-      </section>
+      <button type="button" id="open-options" class="sidebar-options" aria-controls="options-view">⚙ &nbsp; Options</button>
+
     </aside>
     <main class="game">
       <header><h1>Community Episode Guesser</h1><p id="challenge-subtitle" class="challenge-subtitle" hidden></p></header>
@@ -152,6 +141,24 @@
           <ol id="leaderboard-list" class="leaderboard-list" hidden></ol>
         </section>
     </main>
+    <section id="options-view" class="settings-view" aria-label="Settings" hidden>
+      <button type="button" id="options-back" class="highscores-back">← Back to game</button>
+      <span class="highscores-overline">COMMUNITY GUESSER</span>
+      <h2>Options</h2>
+      <p class="settings-description">Customize the game. Changes are saved automatically.</p>
+      <section id="options-panel" class="options-panel" aria-label="Game options">
+        <h3>Game options</h3>
+        <label class="option-toggle"><input id="option-show-on-focus" type="checkbox" checked><span><strong>Show all episodes on focus</strong><small>Turn off to show suggestions only after typing.</small></span></label>
+        <label class="option-toggle"><input id="option-auto-focus" type="checkbox"><span><strong>Focus input after correct guess</strong><small>Useful for fast keyboard play.</small></span></label>
+        <label class="timeline-speed-setting" for="option-timeline-speed"><span><strong>Timeline animation speed</strong><small>Choose how quickly the cards reorder and reveal the answer.</small></span>
+          <select id="option-timeline-speed">
+            <option value="fast">Fast (0.3 s)</option>
+            <option value="normal">Normal (0.7 s)</option>
+            <option value="slow" selected>Slow (1.3 s)</option>
+          </select>
+        </label>
+      </section>
+    </section>
     <section id="highscores-view" class="highscores-view" aria-label="All website high scores" hidden>
       <div class="highscores-view-top">
         <button type="button" id="highscores-back" class="highscores-back">← Back to game</button>
