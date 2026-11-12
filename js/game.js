@@ -20,13 +20,21 @@
   const textAnswer = $("text-answer"), fourChoices = $("four-choices");
   const timelineBoard = $("timeline-board"), timelineCards = $("timeline-cards");
   const timelineSubmit = $("timeline-submit"), restart = $("restart-challenge");
+  const customSetup = $("custom-setup"), customLivesInput = $("custom-lives");
+  const customLivesDisplay = $("custom-lives-display");
+  const customSeasonInputs = Array.from(document.querySelectorAll("[data-custom-season]"));
+  const customStart = $("custom-start"), customError = $("custom-error");
+  const openOptions = $("open-options"), optionsPanel = $("options-panel");
+  const optionShowOnFocus = $("option-show-on-focus"), optionAutoFocus = $("option-auto-focus");
+  const optionsKey = "community-guesser-options-v1";
+  const customKey = "community-guesser-custom-v1";
   const modeKey = "community-guesser-mode";
   const legacyHighScoreKey = "community-guesser-high-score";
   const challengeNames = {
     classic: "Classic game", progressive: "Progressive Reveal",
     four: "Four Choices", timeline: "Timeline Challenge",
     survival: "Survival Mode", one110: "One Life, 110",
-    season: "Season Challenge", daily: "Daily Challenge"
+    season: "Season Challenge", daily: "Daily Challenge", custom: "Custom Game"
   };
   const label = ep => ep.id + " " + ep.title;
   const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -40,6 +48,59 @@
   } catch (_) {}
   modeSelect.value = mode;
   let challenge = "classic", season = 1, score = 0, high = 0;
+  let customLives = 3, customSeasons = [1,2,3,4,5,6], customStarted = false;
+  let showOnFocus = true, autoFocusInput = false;
+  try {
+    const savedOptions = JSON.parse(localStorage.getItem(optionsKey) || "{}");
+    if (typeof savedOptions.showOnFocus === "boolean") showOnFocus = savedOptions.showOnFocus;
+    if (typeof savedOptions.autoFocusInput === "boolean") autoFocusInput = savedOptions.autoFocusInput;
+    const savedCustom = JSON.parse(localStorage.getItem(customKey) || "{}");
+    if (Number.isInteger(savedCustom.lives) && savedCustom.lives >= 1 && savedCustom.lives <= 10) customLives = savedCustom.lives;
+    if (Array.isArray(savedCustom.seasons)) {
+      const valid = [...new Set(savedCustom.seasons.map(Number))].filter(n => Number.isInteger(n) && n >= 1 && n <= 6);
+      if (valid.length) customSeasons = valid.sort((a,b) => a-b);
+    }
+  } catch (_) {}
+  optionShowOnFocus.checked = showOnFocus;
+  optionAutoFocus.checked = autoFocusInput;
+  customLivesInput.value = String(customLives);
+  customLivesDisplay.textContent = String(customLives);
+  customSeasonInputs.forEach(el => { el.checked = customSeasons.includes(Number(el.value)); });
+  function saveOptions() {
+    try { localStorage.setItem(optionsKey, JSON.stringify({showOnFocus, autoFocusInput})); } catch (_) {}
+  }
+  function saveCustom() {
+    try { localStorage.setItem(customKey, JSON.stringify({lives:customLives, seasons:customSeasons})); } catch (_) {}
+  }
+  optionShowOnFocus.addEventListener("change", () => {
+    showOnFocus = optionShowOnFocus.checked;
+    saveOptions();
+    if (!showOnFocus && !input.value.trim()) closeSuggestions();
+  });
+  optionAutoFocus.addEventListener("change", () => {
+    autoFocusInput = optionAutoFocus.checked;
+    saveOptions();
+  });
+  openOptions.addEventListener("click", () => {
+    optionsPanel.hidden = !optionsPanel.hidden;
+    openOptions.setAttribute("aria-expanded", String(!optionsPanel.hidden));
+  });
+  customLivesInput.addEventListener("input", () => {
+    customLivesDisplay.textContent = customLivesInput.value;
+  });
+  customSeasonInputs.forEach(el => el.addEventListener("change", () => { customError.hidden = true; }));
+  customStart.addEventListener("click", () => {
+    const seasons = customSeasonInputs.filter(el => el.checked).map(el => Number(el.value));
+    if (!seasons.length) {
+      customError.hidden = false;
+      return;
+    }
+    customSeasons = seasons;
+    customLives = Math.min(10, Math.max(1, Number(customLivesInput.value) || 3));
+    saveCustom();
+    customStarted = true;
+    resetGame();
+  });
   let lives = 3, answered = 0, gameOver = false, currentRound = null;
   let pending = [], previousId = "", selected = null, highlighted = -1, visible = [];
   let currentFrame = 0, revealStage = 1, timelineSelection = -1, timelineOrder = [];
@@ -48,7 +109,8 @@
 
   function modeHighKey() {
     return "community-guesser-high-score-" +
-      (challenge === "classic" ? mode : challenge === "season" ? "season-" + season : challenge);
+      (challenge === "classic" ? mode : challenge === "season" ? "season-" + season :
+       challenge === "custom" ? "custom-" + customLives + "-" + customSeasons.join("-") : challenge);
   }
   function loadHigh() {
     try {
@@ -110,7 +172,9 @@
   function displayLabel(ep) { return challenge === "classic" && (mode === "hard" || mode === "impossible") ? ep.id : label(ep); }
 
   function candidateEpisodes() {
-    return challenge === "season" ? episodes.filter(ep => seasonNumber(ep) === season) : episodes;
+    if (challenge === "season") return episodes.filter(ep => seasonNumber(ep) === season);
+    if (challenge === "custom") return episodes.filter(ep => customSeasons.includes(seasonNumber(ep)));
+    return episodes;
   }
 
   function search(value) {
@@ -239,17 +303,26 @@
   function updateShell() {
     menuPickerMark();
     modePicker.hidden = challenge !== "classic";
+    customSetup.hidden = challenge !== "custom" || customStarted;
+    if (challenge === "custom" && !customStarted) {
+      customLivesInput.value = String(customLives);
+      customLivesDisplay.textContent = String(customLives);
+      customSeasonInputs.forEach(el => { el.checked = customSeasons.includes(Number(el.value)); });
+      customError.hidden = true;
+    }
     challengeSubtitle.hidden = challenge === "classic";
     challengeSubtitle.textContent = challengeNames[challenge] || "";
     seasonLabel.hidden = challenge !== "season";
     challengeTools.hidden = challenge !== "season" && challenge !== "survival" &&
-      challenge !== "one110" && challenge !== "daily";
-    frameViewer.hidden = challenge === "timeline";
+      challenge !== "one110" && challenge !== "daily" && challenge !== "custom";
+    frameViewer.hidden = challenge === "timeline" || (challenge === "custom" && !customStarted);
     timelineBoard.hidden = challenge !== "timeline";
-    textAnswer.hidden = challenge === "four" || challenge === "timeline";
+    textAnswer.hidden = challenge === "four" || challenge === "timeline" ||
+      (challenge === "custom" && !customStarted);
     fourChoices.hidden = challenge !== "four";
     revealControls.hidden = challenge !== "progressive";
     highLabel.textContent = challenge === "daily" ? "Best Daily Score" : "High Score";
+    form.querySelector(".score").hidden = challenge === "custom" && !customStarted;
     restart.hidden = true;
     seasonSelect.value = String(season);
   }
@@ -265,7 +338,7 @@
     currentRound = null;
     pending = [];
     previousId = "";
-    score = 0; answered = 0; lives = 3; gameOver = false;
+    score = 0; answered = 0; lives = challenge === "custom" ? customLives : 3; gameOver = false;
     awaitingNext = false; selected = null; highlighted = -1; visible = [];
     currentFrame = 0; revealStage = 1; timelineSelection = -1;
     input.value = ""; input.disabled = false; button.disabled = false;
@@ -274,6 +347,10 @@
     scoreEl.textContent = "0";
     high = loadHigh(); highEl.textContent = String(high);
     updateShell();
+    if (challenge === "custom" && !customStarted) {
+      progressDetail.textContent = "";
+      return;
+    }
     if (challenge === "daily") {
       dailyPlan = dailySchedule();
       dailyAnswers = readDaily();
@@ -290,6 +367,7 @@
   function activate(name) {
     if (!challengeNames[name]) return;
     challenge = name;
+    if (name === "custom") customStarted = false;
     openMenu(false);
     resetGame();
   }
@@ -311,9 +389,9 @@
   });
 
   function episodePool() {
-    return challenge === "season"
-      ? playable.filter(ep => seasonNumber(ep) === season)
-      : playable;
+    if (challenge === "season") return playable.filter(ep => seasonNumber(ep) === season);
+    if (challenge === "custom") return playable.filter(ep => customSeasons.includes(seasonNumber(ep)));
+    return playable;
   }
   function refillQueue() {
     const eligible = episodePool().map(ep => ep.id);
@@ -412,6 +490,8 @@
   function updateProgress() {
     let message = "";
     if (challenge === "survival") message = "Lives: " + lives + " / 3 · " + score + " correct";
+    if (challenge === "custom") message = "Lives: " + lives + " / " + customLives +
+      " · " + customSeasons.map(n => "S" + n).join(", ") + " · " + score + " correct";
     if (challenge === "one110") message = (answered + 1) + " / " + playable.length + " episodes";
     if (challenge === "daily") message = dailyDate() + " (UTC) · " + (answered + 1) + " / 5";
     if (challenge === "season") message = episodePool().length + " episodes in this season";
@@ -614,9 +694,10 @@
       }
       advance();
       feedback.textContent = "Correct! Score: " + score;
+      if (autoFocusInput && !gameOver && !textAnswer.hidden) input.focus();
       return;
     }
-    if (challenge === "survival") {
+    if (challenge === "survival" || challenge === "custom") {
       lives--;
       if (lives > 0) {
         const last = currentRound.id;
@@ -635,7 +716,8 @@
   function resolveInput() {
     const matches = search(input.value);
     const candidate = selected || (matches.length === 1 ? matches[0] : null);
-    if (!candidate || (challenge === "season" && seasonNumber(candidate) !== season)) {
+    if (!candidate || (challenge === "season" && seasonNumber(candidate) !== season) ||
+      (challenge === "custom" && !customSeasons.includes(seasonNumber(candidate)))) {
       feedback.textContent = "Select an episode from the list.";
       return;
     }
@@ -648,9 +730,13 @@
     resolveInput();
   });
   restart.addEventListener("click", () => { if (challenge !== "daily") resetGame(); });
-  input.addEventListener("focus", renderSuggestions);
+  input.addEventListener("focus", () => {
+    if (showOnFocus || input.value.trim()) renderSuggestions();
+  });
   input.addEventListener("input", () => {
-    selected = null; feedback.textContent = ""; renderSuggestions();
+    selected = null; feedback.textContent = "";
+    if (!showOnFocus && !input.value.trim()) closeSuggestions();
+    else renderSuggestions();
   });
   input.addEventListener("keydown", event => {
     if (event.key === "Escape") { closeSuggestions(); return; }
