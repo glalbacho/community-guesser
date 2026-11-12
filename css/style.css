@@ -136,3 +136,16 @@ button,select,input{font-family:inherit}
 .leaderboard-rank{display:flex;gap:10px;align-items:center;min-width:0;overflow-wrap:anywhere}.leaderboard-rank strong{color:#e3c979}
 .leaderboard-points{white-space:nowrap;font-weight:700;font-variant-numeric:tabular-nums}
 @media(max-width:400px){.leaderboard-entry{flex-direction:column}}
+
+/* Composable Custom Game mechanics */
+.custom-combos{margin-top:22px;padding-top:16px;border-top:1px solid #4d5d72}
+.custom-combos h3{font-size:18px;margin:0 0 6px}
+.custom-combos>p{font-size:13px;line-height:1.5;color:#c3c8d2;margin:0 0 14px}
+.custom-modifiers{margin:11px 0 0;padding:14px 0 6px;border:0;border-top:1px solid #485568;display:grid;gap:9px}
+.custom-modifiers legend{font-size:14px;font-weight:700;padding:0 8px 0 0}
+.custom-modifier{display:flex;align-items:center;gap:12px;padding:11px 12px;background:#333b48;border:1px solid #536071;border-radius:10px;cursor:pointer}
+.custom-modifier:has(input:checked){background:#2a3c55;border-color:#82a8d9}
+.custom-modifier input{width:19px;height:19px;flex-shrink:0;margin:0;accent-color:#85b4f5}
+.custom-modifier span{display:flex;flex-direction:column;gap:3px}
+.custom-modifier strong{font-size:14px}.custom-modifier small{font-size:12px;line-height:1.4;color:#c1c9d8}
+.custom-summary{margin:16px 0 0;padding:12px 14px;background:#1d2b40;border-radius:10px;font-size:12px;line-height:1.6;color:#bfd5f1}
