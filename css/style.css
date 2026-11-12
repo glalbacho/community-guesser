@@ -240,3 +240,15 @@ button,select,input{font-family:inherit}
 .timeline-speed-setting strong{font-size:13px}
 .timeline-speed-setting small{font-size:12px;color:#b8becc;line-height:1.4}
 .timeline-speed-setting select{width:100%;background:#313744;border:1px solid #636e81;color:#f2f5fa;border-radius:9px;padding:10px 12px;font:inherit;font-size:13px}
+
+/* Timeline: wrong order resolves red, titles appear sequentially */
+.timeline-card.is-incorrect{
+  cursor:default;
+  border-color:#cf6969!important;
+  background:#5c3039!important;
+  box-shadow:0 0 0 1px #a84950 inset;
+}
+.timeline-card.is-incorrect .timeline-answer{color:#ffe0e0}
+.timeline-board.incorrect .timeline-track span{background:#923d48;border-color:#db8585}
+.timeline-board.incorrect .timeline-instructions p{color:#fac3c3}
+.timeline-card.is-incorrect img{opacity:.98}
