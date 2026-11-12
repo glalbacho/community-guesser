@@ -18,6 +18,8 @@
   const progressDetail = $("progress-detail"), revealControls = $("reveal-controls");
   const revealNext = $("reveal-next"), revealLabel = $("reveal-label");
   const textAnswer = $("text-answer"), fourChoices = $("four-choices");
+  const communityleBoard = $("communityle-board"), communityleDate = $("communityle-date");
+  const communityleAttempts = $("communityle-attempts"), communityleGuesses = $("communityle-guesses");
   const timelineBoard = $("timeline-board"), timelineCards = $("timeline-cards");
   const timelineSubmit = $("timeline-submit"), restart = $("restart-challenge");
   const customSetup = $("custom-setup"), customLivesInput = $("custom-lives");
@@ -34,7 +36,8 @@
     classic: "Classic game", progressive: "Progressive Reveal",
     four: "Four Choices", timeline: "Timeline Challenge",
     survival: "Survival Mode", one110: "One Life, 110",
-    season: "Season Challenge", daily: "Daily Challenge", custom: "Custom Game"
+    season: "Season Challenge", daily: "Daily Challenge", custom: "Custom Game",
+    communityle: "Community-le"
   };
   const label = ep => ep.id + " " + ep.title;
   const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -105,6 +108,7 @@
   let pending = [], previousId = "", selected = null, highlighted = -1, visible = [];
   let currentFrame = 0, revealStage = 1, timelineSelection = -1, timelineOrder = [];
   let choices = [], dailyAnswers = [], dailyPlan = [], awaitingNext = false;
+  let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
 
   function modeHighKey() {
@@ -130,6 +134,7 @@
   }
   function dailyDate() { return new Date().toISOString().slice(0, 10); }
   function dayKey() { return "community-guesser-daily-" + dailyDate(); }
+  function communityleKey() { return "community-guesser-communityle-" + dailyDate(); }
   function stableHash(text) {
     let h = 2166136261;
     for (let i = 0; i < text.length; i++) {
@@ -159,6 +164,83 @@
       const urls = imagePool[id];
       return { id, url: urls[Math.floor(rng() * urls.length)] };
     });
+  }
+  // A seeded daily choice means every user with the same published catalogue
+  // gets exactly the same screenshot for the entire UTC day.
+  function communityleSchedule() {
+    const rng = seededRandom(stableHash("community-le-v1:" + dailyDate()));
+    const eligible = playable.slice().sort((a,b) => a.id.localeCompare(b.id));
+    if (!eligible.length) return null;
+    const ep = eligible[Math.floor(rng() * eligible.length)];
+    const urls = imagePool[ep.id];
+    return { id:ep.id, url:urls[Math.floor(rng() * urls.length)] };
+  }
+  function readCommunityle(solution) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(communityleKey()) || "{}");
+      if (saved.solution !== solution.id || saved.url !== solution.url || !Array.isArray(saved.guesses)) return [];
+      const valid = [...new Set(saved.guesses.slice(0,6))];
+      return valid.filter(id => typeof id === "string" && byId[id]);
+    } catch (_) { return []; }
+  }
+  function saveCommunityle() {
+    if (!communityleSolution) return;
+    try {
+      localStorage.setItem(communityleKey(), JSON.stringify({
+        solution:communityleSolution.id, url:communityleSolution.url, guesses:communityleHistory
+      }));
+    } catch (_) {}
+  }
+  function communityleDone() {
+    return !!communityleSolution && (
+      communityleHistory.includes(communityleSolution.id) || communityleHistory.length >= 6);
+  }
+  function renderCommunityle() {
+    communityleDate.textContent = dailyDate() + " · UTC daily";
+    communityleAttempts.textContent = communityleHistory.length + " / 6 guesses";
+    communityleGuesses.replaceChildren();
+    for (let i = 0; i < 6; i++) {
+      const row = document.createElement("div");
+      row.className = "communityle-guess";
+      const name = document.createElement("span");
+      name.className = "guess-name";
+      const hint = document.createElement("span");
+      hint.className = "guess-hint";
+      const id = communityleHistory[i];
+      if (id && byId[id]) {
+        name.textContent = (i + 1) + ". " + label(byId[id]);
+        if (id === communityleSolution.id) {
+          row.classList.add("exact");
+          hint.textContent = "CORRECT";
+        } else if (seasonNumber(byId[id]) === seasonNumber(byId[communityleSolution.id])) {
+          row.classList.add("same-season");
+          hint.textContent = "RIGHT SEASON";
+        } else {
+          row.classList.add("wrong-season");
+          hint.textContent = "WRONG SEASON";
+        }
+      } else {
+        row.classList.add("empty");
+        name.textContent = (i + 1) + ". —";
+        hint.textContent = "";
+      }
+      row.appendChild(name);
+      row.appendChild(hint);
+      communityleGuesses.appendChild(row);
+    }
+  }
+  function finishCommunityle() {
+    const won = communityleHistory.includes(communityleSolution.id);
+    gameOver = true;
+    input.disabled = true;
+    button.disabled = true;
+    closeSuggestions();
+    // Once solved (or out of guesses), reveal the full unaltered screenshot.
+    displayFrame();
+    feedback.textContent = won
+      ? "Community-le solved in " + communityleHistory.length + " / 6 guesses!"
+      : "No guesses left. The episode was " + label(byId[communityleSolution.id]) + ".";
+    renderCommunityle();
   }
   function readDaily() {
     try {
@@ -322,7 +404,9 @@
     fourChoices.hidden = challenge !== "four";
     revealControls.hidden = challenge !== "progressive";
     highLabel.textContent = challenge === "daily" ? "Best Daily Score" : "High Score";
-    form.querySelector(".score").hidden = challenge === "custom" && !customStarted;
+    communityleBoard.hidden = challenge !== "communityle";
+    form.querySelector(".score").hidden = challenge === "communityle" || (challenge === "custom" && !customStarted);
+
     restart.hidden = true;
     seasonSelect.value = String(season);
   }
@@ -347,6 +431,16 @@
     scoreEl.textContent = "0";
     high = loadHigh(); highEl.textContent = String(high);
     updateShell();
+    if (challenge === "communityle") {
+      communityleSolution = communityleSchedule();
+      if (!communityleSolution) { finishGame("No episode images available."); return; }
+      communityleHistory = readCommunityle(communityleSolution);
+      currentRound = {id: communityleSolution.id, frames: [createFrame(communityleSolution.url)]};
+      renderCommunityle();
+      displayFrame();
+      if (communityleDone()) finishCommunityle();
+      return;
+    }
     if (challenge === "custom" && !customStarted) {
       progressDetail.textContent = "";
       return;
@@ -541,6 +635,33 @@
         frame.img.style.imageRendering = "pixelated";
         imageBox.replaceChildren(frame.img);
       }
+    } else if (challenge === "communityle" && !communityleDone()) {
+      // Deliberately extreme on guess 1: small resolution, strong blur and
+      // heavy colour shift. Each wrong guess increases detail and clarity.
+      const stage = communityleHistory.length;
+      const resolutions = [9, 15, 26, 46, 90, 180];
+      const blurs = [25, 18, 12, 8, 4, 1];
+      const shifts = [155, 120, 80, 45, 20, 0];
+      const stageWidth = resolutions[stage] || resolutions[5];
+      const pixelHue = shifts[stage] || 0;
+      try {
+        const canvas = document.createElement("canvas");
+        const ratio = (frame.img.naturalHeight || 9) / (frame.img.naturalWidth || 16);
+        canvas.width = stageWidth;
+        canvas.height = Math.max(1, Math.round(stageWidth * ratio));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas unavailable");
+        context.imageSmoothingEnabled = false;
+        context.drawImage(frame.img, 0, 0, canvas.width, canvas.height);
+        canvas.style.cssText = "width:100%;height:100%;object-fit:contain;image-rendering:pixelated";
+        canvas.style.filter = "blur(" + blurs[stage] + "px) hue-rotate(" + pixelHue + "deg) saturate(" + (1.7 - stage*.13) + ") contrast(" + (1.5-stage*.08) + ")";
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", "Daily Community-le distorted screenshot, attempt " + (stage+1));
+        imageBox.replaceChildren(canvas);
+      } catch (_) {
+        frame.img.style.filter = "blur(" + blurs[stage] + "px) hue-rotate(" + pixelHue + "deg)";
+        imageBox.replaceChildren(frame.img);
+      }
     } else if (challenge === "progressive" && revealStage < 5) {
       // Canvas changes only the browser rendering, never the source WebP file.
       try {
@@ -671,6 +792,29 @@
   }
   function answer(value, correction = "") {
     if (gameOver || awaitingNext || !currentRound) return;
+    if (challenge === "communityle") {
+      if (typeof value !== "string" || !byId[value]) return;
+      if (communityleHistory.includes(value)) {
+        feedback.textContent = "You already guessed that episode.";
+        return;
+      }
+      communityleHistory.push(value);
+      saveCommunityle();
+      renderCommunityle();
+      input.value = "";
+      selected = null;
+      closeSuggestions();
+      if (communityleDone()) {
+        finishCommunityle();
+        return;
+      }
+      displayFrame();
+      feedback.textContent = seasonNumber(byId[value]) === seasonNumber(byId[communityleSolution.id])
+        ? "Right season! The picture is clearer now."
+        : "Wrong season. The picture is clearer now.";
+      if (autoFocusInput) input.focus();
+      return;
+    }
     const correct = challenge === "timeline" ? value === true : value === currentRound.id;
     answered++;
     if (challenge === "daily") {
@@ -725,7 +869,7 @@
   }
   form.addEventListener("submit", event => {
     event.preventDefault();
-    if (gameOver && challenge !== "daily") { resetGame(); return; }
+    if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(); return; }
     if (challenge === "four" || challenge === "timeline" || gameOver) return;
     resolveInput();
   });
