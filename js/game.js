@@ -46,6 +46,8 @@
   const distortedEnabled = () => (challenge === "classic" && mode === "impossible") || customHas("distort");
   const openOptions = $("open-options"), optionsPanel = $("options-panel");
   const optionShowOnFocus = $("option-show-on-focus"), optionAutoFocus = $("option-auto-focus");
+  const optionTimelineSpeed = $("option-timeline-speed");
+  const timelineDurations = {fast:300,normal:700,slow:1300};
   const answerReveal = $("answer-reveal"), answerRevealTitle = $("answer-reveal-title");
   const answerRevealDetail = $("answer-reveal-detail"), answerRevealItems = $("answer-reveal-items");
   const board = $("leaderboard"), boardStatus = $("leaderboard-status"), boardForm = $("leaderboard-form");
@@ -76,11 +78,12 @@
   let challenge = "classic", season = 1, score = 0, high = 0;
   let customLives = 3, customSeasons = [1,2,3,4,5,6], customStarted = false;
   let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false};
-  let showOnFocus = true, autoFocusInput = false;
+  let showOnFocus = true, autoFocusInput = false, timelineSpeed = "slow";
   try {
     const savedOptions = JSON.parse(localStorage.getItem(optionsKey) || "{}");
     if (typeof savedOptions.showOnFocus === "boolean") showOnFocus = savedOptions.showOnFocus;
     if (typeof savedOptions.autoFocusInput === "boolean") autoFocusInput = savedOptions.autoFocusInput;
+    if (Object.hasOwn(timelineDurations,savedOptions.timelineSpeed)) timelineSpeed = savedOptions.timelineSpeed;
     const savedCustom = JSON.parse(localStorage.getItem(customKey) || "{}");
     if (Number.isInteger(savedCustom.lives) && savedCustom.lives >= 1 && savedCustom.lives <= 10) customLives = savedCustom.lives;
     if (Array.isArray(savedCustom.seasons)) {
@@ -93,6 +96,7 @@
   } catch (_) {}
   optionShowOnFocus.checked = showOnFocus;
   optionAutoFocus.checked = autoFocusInput;
+  optionTimelineSpeed.value = timelineSpeed;
   customLivesInput.value = String(customLives);
   customLivesDisplay.textContent = String(customLives);
   customSeasonInputs.forEach(el => { el.checked = customSeasons.includes(Number(el.value)); });
@@ -109,7 +113,7 @@
     customSummary.textContent = total + " episodes · " + customLivesInput.value + " lives · " + selectedFeatures.join(" + ");
   }
   function saveOptions() {
-    try { localStorage.setItem(optionsKey, JSON.stringify({showOnFocus, autoFocusInput})); } catch (_) {}
+    try { localStorage.setItem(optionsKey, JSON.stringify({showOnFocus, autoFocusInput, timelineSpeed})); } catch (_) {}
   }
   function saveCustom() {
     try { localStorage.setItem(customKey, JSON.stringify({lives:customLives, seasons:customSeasons, features:customFeatures})); } catch (_) {}
@@ -121,6 +125,11 @@
   });
   optionAutoFocus.addEventListener("change", () => {
     autoFocusInput = optionAutoFocus.checked;
+    saveOptions();
+  });
+  optionTimelineSpeed.addEventListener("change", () => {
+    if (!Object.hasOwn(timelineDurations,optionTimelineSpeed.value)) return;
+    timelineSpeed=optionTimelineSpeed.value;
     saveOptions();
   });
   openOptions.addEventListener("click", () => {
@@ -156,7 +165,7 @@
   let choices = [], dailyAnswers = [], dailyGuesses = [], dailyPlan = [], awaitingNext = false;
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
-  let timelineDragging = null, timelineRevealed = false, suppressTimelineClick = false;
+  let timelineDragging = null, timelineRevealed = false, timelineRevealVersion = 0;
 
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
@@ -774,7 +783,9 @@
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
     timelineSubmit.textContent="Check order";
-    suppressTimelineClick=false;
+    ++timelineRevealVersion;
+    timelineDragging=null;
+    timelineBoard.classList.remove("reordering");
     clearBoard();
     clearAnswerReveal();
     ++epoch;
@@ -1099,141 +1110,168 @@
     return currentRound.timeline.slice().sort((a,b)=>
       episodes.findIndex(ep=>ep.id===a)-episodes.findIndex(ep=>ep.id===b));
   }
-  function timelineCanReorder() { return challenge==="timeline" && !gameOver && !timelineRevealed; }
+  function timelineCanReorder() {
+    return challenge==="timeline" && !gameOver && !timelineRevealed;
+  }
+  function timelineAnimationDuration() {
+    // Follow OS reduced-motion preference without changing the saved choice.
+    if (typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches) return 0;
+    return timelineDurations[timelineSpeed] || timelineDurations.slow;
+  }
   function animateTimelineOrder(ordered,animate=true) {
     const oldRects=new Map();
-    if(animate && typeof timelineCards.querySelectorAll==="function") {
-      Array.from(timelineCards.children).forEach(card=>{
-        if(card.dataset && card.getBoundingClientRect)oldRects.set(card.dataset.episode,card.getBoundingClientRect());
-      });
-    }
+    if(animate)Array.from(timelineCards.children).forEach(card=>{
+      if(card.dataset && card.getBoundingClientRect)
+        oldRects.set(card.dataset.episode,card.getBoundingClientRect());
+    });
     timelineOrder=ordered.slice();
-    // Reuse the nodes so screenshots stay loaded; animate their layout movement.
     const nodes=new Map(Array.from(timelineCards.children).map(el=>[el.dataset.episode,el]));
     for(const id of timelineOrder) {
       const card=nodes.get(id);
       if(card)timelineCards.appendChild(card);
     }
-    if(animate) {
-      Array.from(timelineCards.children).forEach(card=>{
-        const before=oldRects.get(card.dataset.episode);
-        if(!before||!card.getBoundingClientRect||!card.animate)return;
-        const after=card.getBoundingClientRect();
-        const dx=before.left-after.left,dy=before.top-after.top;
-        if(Math.abs(dx)+Math.abs(dy)<2)return;
-        card.animate([{transform:"translate("+dx+"px,"+dy+"px)"},{transform:"translate(0,0)"}],
-          {duration:500,easing:"cubic-bezier(.2,.75,.25,1)"});
-      });
-    }
-    Array.from(timelineCards.children).forEach((card,i)=>{
+    const duration=animate?timelineAnimationDuration():0;
+    const animations=[];
+    if(duration>0)Array.from(timelineCards.children).forEach(card=>{
+      const before=oldRects.get(card.dataset.episode);
+      if(!before||!card.getBoundingClientRect||!card.animate)return;
+      const after=card.getBoundingClientRect();
+      const dx=before.left-after.left,dy=before.top-after.top;
+      if(Math.abs(dx)+Math.abs(dy)<2)return;
+      const animation=card.animate(
+        [{transform:"translate("+dx+"px,"+dy+"px)"},{transform:"translate(0,0)"}],
+        {duration,easing:"cubic-bezier(.25,.75,.3,1)"});
+      if(animation && animation.finished)animations.push(animation.finished.catch(()=>{}));
+    });
+    if(!timelineRevealed)Array.from(timelineCards.children).forEach((card,i)=>{
       const caption=card.querySelector(".timeline-handle");
       if(caption)caption.textContent=(i+1)+" · Drag to reorder";
       card.setAttribute("aria-label","Position "+(i+1)+", drag to reorder");
     });
+    return Promise.all(animations);
   }
   function moveTimelineCard(from,to) {
     if(!timelineCanReorder()||from===to||from<0||to<0||
        from>=timelineOrder.length||to>=timelineOrder.length)return;
-    const next=timelineOrder.slice();
-    const [moved]=next.splice(from,1);
-    next.splice(to,0,moved);
+    const order=timelineOrder.slice();
+    const [moved]=order.splice(from,1);
+    order.splice(to,0,moved);
     timelineSelection=-1;
-    animateTimelineOrder(next,true);
+    animateTimelineOrder(order,true);
+  }
+  function cancelTimelineDrag(card) {
+    if(!timelineDragging || timelineDragging.card!==card)return;
+    card.style.transform="";
+    card.classList.remove("dragging");
+    Array.from(timelineCards.children).forEach(el=>el.classList.remove("drag-over"));
+    timelineDragging=null;
   }
   function renderTimeline() {
     timelineCards.replaceChildren();
     timelineRevealed=false;
-    timelineInstruction.textContent="Drag the images into broadcast order. On mobile, hold and move a card.";
+    timelineDragging=null;
+    timelineInstruction.textContent="Drag any part of a card into broadcast order, then release it over another position.";
     timelineBoard.classList.remove("solved");
+    timelineBoard.classList.remove("reordering");
+    timelineSubmit.hidden=false;
+    timelineSubmit.disabled=false;
+    timelineSubmit.textContent="Check order";
     timelineOrder.forEach((id,i)=>{
       const card=document.createElement("button");
-      card.type="button"; card.className="timeline-card";
+      card.type="button";
+      card.className="timeline-card";
       card.dataset.episode=id;
-      card.setAttribute("aria-label","Position "+(i+1)+", drag to reorder");
+      card.draggable=false;
+      card.setAttribute("aria-label","Position "+(i+1)+", drag to reorder; use Alt+arrows with keyboard");
       const img=document.createElement("img");
       const urls=imagePool[id];
       const stored=currentRound["timelineImage-"+id]||
         (currentRound["timelineImage-"+id]=urls[Math.floor(Math.random()*urls.length)]);
-      img.src=stored; img.alt="Unknown Community episode screenshot";
+      img.src=stored;
+      img.alt="Unknown Community episode screenshot";
+      img.draggable=false;
+      img.setAttribute("draggable","false");
       const caption=document.createElement("span");
-      caption.className="timeline-handle";caption.textContent=(i+1)+" · Drag to reorder";
+      caption.className="timeline-handle";
+      caption.textContent=(i+1)+" · Drag to reorder";
       card.appendChild(img);card.appendChild(caption);
+      // Prevent native image dragging and selection; pointer gestures handle
+      // the *whole* button, including the image itself.
+      card.addEventListener("dragstart",event=>event.preventDefault());
+      img.addEventListener("dragstart",event=>event.preventDefault());
       card.addEventListener("pointerdown",event=>{
-        if(!timelineCanReorder()||event.button>0)return;
-        timelineDragging={id,startX:event.clientX,startY:event.clientY,active:false};
+        if(!timelineCanReorder()||event.button!==0)return;
+        event.preventDefault();
+        const rects=Array.from(timelineCards.children).map(node=>node.getBoundingClientRect());
+        timelineDragging={
+          id,card,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
+          active:false,rects
+        };
         if(card.setPointerCapture)card.setPointerCapture(event.pointerId);
       });
       card.addEventListener("pointermove",event=>{
-        if(!timelineDragging||timelineDragging.id!==id||!timelineCanReorder())return;
-        const moved=Math.hypot(event.clientX-timelineDragging.startX,event.clientY-timelineDragging.startY);
-        if(moved>8)timelineDragging.active=true;
-        if(timelineDragging.active){
-          card.classList.add("dragging");
-          if(document.elementFromPoint){
-            const over=document.elementFromPoint(event.clientX,event.clientY);
-            const drop=over&&over.closest?over.closest(".timeline-card"):null;
-            Array.from(timelineCards.children).forEach(node=>node.classList.toggle("drag-over",drop===node&&node!==card));
-          }
-        }
-      });
-      const endDrag=event=>{
-        if(!timelineDragging||timelineDragging.id!==id)return;
-        const active=timelineDragging.active;
-        timelineDragging=null;
-        card.classList.remove("dragging");
-        Array.from(timelineCards.children).forEach(node=>node.classList.remove("drag-over"));
-        if(!active)return;
-        let destination=-1;
-        // Pointer capture keeps event.target on the dragged card, so find the
-        // target from the pointer coordinates instead of event.target.
-        Array.from(timelineCards.children).forEach((node,i)=>{
-          if(!node.getBoundingClientRect)return;
-          const rect=node.getBoundingClientRect();
-          if(event.clientX>=rect.left&&event.clientX<=rect.right&&
-             event.clientY>=rect.top&&event.clientY<=rect.bottom)destination=i;
-        });
-        suppressTimelineClick=true;
-        if(destination>=0)moveTimelineCard(timelineOrder.indexOf(id),destination);
-      };
-      card.addEventListener("pointerup",endDrag);
-      card.addEventListener("pointercancel",()=>{timelineDragging=null;card.classList.remove("dragging");});
-      // Accessible fallback: select a card, then the destination position.
-      card.addEventListener("click",()=>{
-        if(suppressTimelineClick){suppressTimelineClick=false;return;}
-        if(!timelineCanReorder()||timelineDragging)return;
-        const position=timelineOrder.indexOf(id);
-        if(timelineSelection<0){
-          timelineSelection=position;
-          Array.from(timelineCards.children).forEach(el=>el.classList.toggle("selected",el===card));
-        }else{
-          const source=timelineSelection;
-          timelineSelection=-1;
-          Array.from(timelineCards.children).forEach(el=>el.classList.remove("selected"));
-          moveTimelineCard(source,position);
-        }
-      });
-      card.addEventListener("keydown",event=>{
-        if(!timelineCanReorder()||!event.altKey)return;
-        if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;
+        const drag=timelineDragging;
+        if(!drag||drag.card!==card||drag.pointerId!==event.pointerId||
+           !timelineCanReorder())return;
         event.preventDefault();
-        const position=timelineOrder.indexOf(id);
-        moveTimelineCard(position,position+(event.key==="ArrowRight"?1:-1));
+        const dx=event.clientX-drag.startX,dy=event.clientY-drag.startY;
+        if(Math.hypot(dx,dy)>5)drag.active=true;
+        if(!drag.active)return;
+        card.classList.add("dragging");
+        // Unlike the old implementation, the real card follows the pointer.
+        card.style.transform="translate3d("+dx+"px,"+dy+"px,0)";
+        const index=drag.rects.findIndex(r=>
+          event.clientX>=r.left&&event.clientX<=r.right&&
+          event.clientY>=r.top&&event.clientY<=r.bottom);
+        Array.from(timelineCards.children).forEach((node,i)=>
+          node.classList.toggle("drag-over",i===index&&node!==card));
+      });
+      card.addEventListener("pointerup",event=>{
+        const drag=timelineDragging;
+        if(!drag||drag.card!==card||drag.pointerId!==event.pointerId)return;
+        event.preventDefault();
+        const active=drag.active;
+        const from=timelineOrder.indexOf(id);
+        const position=drag.rects.findIndex(r=>
+          event.clientX>=r.left&&event.clientX<=r.right&&
+          event.clientY>=r.top&&event.clientY<=r.bottom);
+        cancelTimelineDrag(card);
+        if(active&&position>=0)moveTimelineCard(from,position);
+      });
+      card.addEventListener("pointercancel",()=>cancelTimelineDrag(card));
+      // Keyboard accessibility without accidental click-to-select behavior.
+      card.addEventListener("keydown",event=>{
+        if(!timelineCanReorder()||!event.altKey||
+           (event.key!=="ArrowLeft"&&event.key!=="ArrowRight"))return;
+        event.preventDefault();
+        moveTimelineCard(timelineOrder.indexOf(id),
+          timelineOrder.indexOf(id)+(event.key==="ArrowRight"?1:-1));
         card.focus();
       });
       timelineCards.appendChild(card);
     });
   }
-  function revealTimelineInPlace(correct) {
+  async function revealTimelineInPlace(correct) {
     timelineRevealed=true;
     timelineDragging=null;
     timelineSelection=-1;
+    const version=++timelineRevealVersion;
     const actual=timelineSortedIds();
-    animateTimelineOrder(actual,true);
+    const needsReorder=!actual.every((id,i)=>id===timelineOrder[i]);
+    timelineSubmit.disabled=true;
+    if(needsReorder) {
+      timelineBoard.classList.add("reordering");
+      timelineInstruction.textContent="Reordering the cards into the correct timeline…";
+      // Wait for every card to finish moving. Reveal titles/colors *afterward*.
+      await animateTimelineOrder(actual,true);
+    }
+    if(version!==timelineRevealVersion||challenge!=="timeline")return;
+    timelineBoard.classList.remove("reordering");
     timelineBoard.classList.add("solved");
     timelineInstruction.textContent=correct
       ?"Perfect! You placed the episodes in the correct order."
-      :"Here is the correct broadcast order — the cards moved into place.";
-    timelineSubmit.hidden=true;
+      :"Here's the correct broadcast order.";
     Array.from(timelineCards.children).forEach((card,i)=>{
       card.classList.add("is-solved");
       card.disabled=true;
@@ -1244,10 +1282,16 @@
         caption.textContent=label(byId[actual[i]]);
       }
     });
+    if(correct){
+      timelineSubmit.hidden=false;
+      timelineSubmit.disabled=false;
+      timelineSubmit.textContent="Next timeline →";
+    }
   }
   timelineSubmit.addEventListener("click",()=>{
     if(gameOver||challenge!=="timeline")return;
     if(timelineRevealed){
+      if(timelineSubmit.disabled)return;
       timelineSubmit.textContent="Check order";
       timelineSubmit.disabled=false;
       timelineSubmit.hidden=false;
