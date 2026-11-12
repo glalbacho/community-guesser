@@ -98,3 +98,23 @@ button,select,input{font-family:inherit}
 .custom-error{color:#f4a7a7;font-size:13px}
 .custom-actions{margin:22px 0 0;text-align:center}.custom-actions .primary-action{width:100%;font-size:16px}
 @media(max-width:600px){.custom-setup{padding:17px 15px}.custom-seasons{grid-template-columns:repeat(2,1fr)}}
+
+/* Wordle-inspired daily episode mode and custom game placement. */
+.challenge-divider{margin:10px 0 4px;padding:18px 10px 8px;border-top:1px solid #525665;display:flex;flex-direction:column;gap:5px}
+.challenge-divider span{font-size:11px;letter-spacing:.14em;font-weight:700;color:#a8b8d4}
+.challenge-divider small{font-size:12px;color:#c5c9d3;line-height:1.4}
+.custom-menu-link{border:1px solid #7893b8;background:#2d3747}
+.communityle-board{width:min(100%,530px);margin:0 auto 15px;text-align:left}
+.communityle-top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:4px 0 11px;font-size:13px;color:#c0c8d9}
+#communityle-attempts{font-size:14px;color:#ebeff6;font-variant-numeric:tabular-nums}
+.communityle-tip{font-size:13px;line-height:1.55;color:#b8becc;margin:6px 0 13px}
+.communityle-tip strong{color:#f3d37a}
+.communityle-guesses{display:flex;flex-direction:column;gap:7px}
+.communityle-guess{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:43px;border-radius:9px;background:#252833;border:1px solid #4b4e5c;padding:9px 12px;font-size:13px}
+.communityle-guess .guess-name{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.communityle-guess .guess-hint{font-weight:700;font-size:12px;flex-shrink:0}
+.communityle-guess.same-season{background:#746027;border-color:#d3b44a;color:#fff}
+.communityle-guess.exact{background:#205d45;border-color:#59be91;color:#fff}
+.communityle-guess.wrong-season{background:#363943;border-color:#555b69;color:#d1d3d9}
+.communityle-guess.empty{opacity:.55;border-style:dashed}
+@media(max-width:600px){.communityle-guess{font-size:12px;padding:9px 10px}.communityle-guess .guess-hint{font-size:11px}}
