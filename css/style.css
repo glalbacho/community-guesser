@@ -220,3 +220,23 @@ button,select,input{font-family:inherit}
 .highscores-card .hs-empty{color:#9eaabd;font-size:12px}
 @media(max-width:880px){.highscores-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.highscores-grid{grid-template-columns:1fr}.highscores-view{width:calc(100% - 24px)}}
+
+/* Entire-card touch / mouse dragging; prevent image ghost and text selection */
+.timeline-card,.timeline-card *{
+  -webkit-user-select:none!important;
+  user-select:none!important;
+  -webkit-touch-callout:none;
+}
+.timeline-card{touch-action:none;cursor:grab;position:relative;z-index:1;transform:translate3d(0,0,0);-webkit-tap-highlight-color:transparent}
+.timeline-card img{pointer-events:none;-webkit-user-drag:none;user-drag:none;touch-action:none}
+.timeline-card span{pointer-events:none}
+.timeline-card.dragging{opacity:1;cursor:grabbing;z-index:10;box-shadow:0 20px 46px #0009;border-color:#b7d8ff;background:#435575;transition:none!important}
+.timeline-card.drag-over{outline:3px dashed #9fc9ff;outline-offset:2px}
+.timeline-board.reordering .timeline-card{pointer-events:none}
+.timeline-board.reordering .timeline-track span{background:#496c96}
+.timeline-card.is-solved{animation:timeline-card-solved .45s ease-out}
+.timeline-speed-setting{display:flex;flex-direction:column;gap:9px;margin:18px 0 8px;color:#e3e5ea}
+.timeline-speed-setting span{display:flex;flex-direction:column;gap:4px}
+.timeline-speed-setting strong{font-size:13px}
+.timeline-speed-setting small{font-size:12px;color:#b8becc;line-height:1.4}
+.timeline-speed-setting select{width:100%;background:#313744;border:1px solid #636e81;color:#f2f5fa;border-radius:9px;padding:10px 12px;font:inherit;font-size:13px}
