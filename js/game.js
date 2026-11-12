@@ -40,6 +40,8 @@
   const distortedEnabled = () => (challenge === "classic" && mode === "impossible") || customHas("distort");
   const openOptions = $("open-options"), optionsPanel = $("options-panel");
   const optionShowOnFocus = $("option-show-on-focus"), optionAutoFocus = $("option-auto-focus");
+  const answerReveal = $("answer-reveal"), answerRevealTitle = $("answer-reveal-title");
+  const answerRevealDetail = $("answer-reveal-detail"), answerRevealItems = $("answer-reveal-items");
   const board = $("leaderboard"), boardStatus = $("leaderboard-status"), boardForm = $("leaderboard-form");
   const boardName = $("leaderboard-name"), boardSubmit = $("leaderboard-submit"), boardList = $("leaderboard-list");
   let boardRequest = 0, boardMode = "", boardScore = 0;
@@ -145,7 +147,7 @@
   let lives = 3, answered = 0, gameOver = false, currentRound = null;
   let pending = [], previousId = "", selected = null, highlighted = -1, visible = [];
   let currentFrame = 0, revealStage = 1, timelineSelection = -1, timelineOrder = [];
-  let choices = [], dailyAnswers = [], dailyPlan = [], awaitingNext = false;
+  let choices = [], dailyAnswers = [], dailyGuesses = [], dailyPlan = [], awaitingNext = false;
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
 
@@ -387,6 +389,7 @@
       ? "Community-le solved in " + communityleHistory.length + " / 6 guesses!"
       : "No guesses left. The episode was " + label(byId[communityleSolution.id]) + ".";
     renderCommunityle();
+    showCommunityleAnswerReveal(won);
     checkBoard(won ? 7 - communityleHistory.length : 0);
   }
   function readDaily() {
@@ -395,8 +398,17 @@
       return Array.isArray(saved.answers) ? saved.answers.slice(0, 5).map(v => v === true) : [];
     } catch (_) { return []; }
   }
+  function readDailyGuesses() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(dayKey()) || "{}");
+      if (!Array.isArray(saved.guesses)) return [];
+      return saved.guesses.slice(0, 5).map(id => typeof id === "string" && byId[id] ? id : null);
+    } catch (_) { return []; }
+  }
   function saveDaily() {
-    try { localStorage.setItem(dayKey(), JSON.stringify({ answers: dailyAnswers })); } catch (_) {}
+    try {
+      localStorage.setItem(dayKey(), JSON.stringify({ answers:dailyAnswers, guesses:dailyGuesses }));
+    } catch (_) {}
   }
   function displayLabel(ep) {
     return ((challenge === "classic" && (mode === "hard" || mode === "impossible")) ||
@@ -532,6 +544,97 @@
     if (event.key === "Escape" && menu.classList.contains("open")) openMenu(false);
   });
 
+  // The reveal uses fresh, unmodified source URLs, never the filtered
+  // image/canvas from the currently running game.
+  function clearAnswerReveal() {
+    answerReveal.hidden = true;
+    answerReveal.className = "answer-reveal";
+    answerRevealTitle.textContent = "";
+    answerRevealDetail.textContent = "";
+    answerRevealItems.replaceChildren();
+  }
+  function addAnswerReveal(id, imageUrl, status, subtitle, kind) {
+    if (!byId[id]) return;
+    const card = document.createElement("article");
+    card.className = "answer-reveal-item";
+    if (kind) card.classList.add(kind);
+    const img = document.createElement("img");
+    img.className = "answer-reveal-image";
+    img.src = imageUrl || (imagePool[id] && imagePool[id][0]) || "";
+    img.alt = "Original screenshot from " + label(byId[id]);
+    img.loading = "lazy";
+    const meta = document.createElement("div");
+    meta.className = "answer-reveal-meta";
+    const textWrap = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "answer-reveal-label";
+    title.textContent = label(byId[id]);
+    textWrap.appendChild(title);
+    if (subtitle) {
+      const secondary = document.createElement("div");
+      secondary.className = "answer-reveal-subtitle";
+      secondary.textContent = subtitle;
+      textWrap.appendChild(secondary);
+    }
+    const tag = document.createElement("span");
+    tag.className = "answer-reveal-status";
+    tag.textContent = status || "";
+    meta.appendChild(textWrap);
+    meta.appendChild(tag);
+    card.appendChild(img);
+    card.appendChild(meta);
+    answerRevealItems.appendChild(card);
+  }
+  function showAnswerRevealForRound(won) {
+    clearAnswerReveal();
+    if (!currentRound) return;
+    answerReveal.hidden = false;
+    if (challenge === "timeline" && currentRound.timeline) {
+      answerReveal.classList.add("timeline");
+      answerRevealTitle.textContent = "Correct chronological order";
+      answerRevealDetail.textContent = "These episodes aired in this order.";
+      const ordered = currentRound.timeline.slice().sort((a,b) =>
+        episodes.findIndex(ep => ep.id === a) - episodes.findIndex(ep => ep.id === b));
+      ordered.forEach((id,i) => addAnswerReveal(id, currentRound["timelineImage-" + id],
+        "POSITION " + (i+1), "Episode " + (i+1) + " in the sequence", won ? "correct" : ""));
+      return;
+    }
+    if (!byId[currentRound.id]) { answerReveal.hidden = true; return; }
+    answerRevealTitle.textContent = won ? "Correct!" : "The correct episode was…";
+    answerRevealDetail.textContent = won
+      ? "Here is the original screenshot without any effects."
+      : "Here's the answer, revealed with the original, unfiltered picture.";
+    const first = currentRound.frames && currentRound.frames[0];
+    addAnswerReveal(currentRound.id, first && first.img.src, won ? "CORRECT" : "REVEALED", "", won ? "correct" : "wrong");
+  }
+  function showDailyAnswerReveal() {
+    clearAnswerReveal();
+    answerReveal.hidden = false;
+    answerReveal.classList.add("daily");
+    answerRevealTitle.textContent = "Your five daily answers";
+    answerRevealDetail.textContent = "All five original screenshots and their correct episodes, including the last one.";
+    dailyPlan.forEach((step,i) => {
+      const answeredRight = dailyAnswers[i] === true;
+      const guess = dailyGuesses[i];
+      const subtitle = answeredRight ? "Your answer was correct"
+        : guess && byId[guess] ? "You guessed: " + label(byId[guess])
+        : "Your guess was not saved in the previous version";
+      addAnswerReveal(step.id, step.url, answeredRight ? "CORRECT" : "MISSED",
+        subtitle, answeredRight ? "correct" : "wrong");
+    });
+  }
+  function showCommunityleAnswerReveal(won) {
+    clearAnswerReveal();
+    if (!communityleSolution) return;
+    answerReveal.hidden = false;
+    answerRevealTitle.textContent = won ? "Community-le solved!" : "Community-le answer revealed";
+    answerRevealDetail.textContent = won ? "You solved today's episode."
+      : "You used all six guesses. This was the correct episode.";
+    addAnswerReveal(communityleSolution.id, communityleSolution.url,
+      won ? "SOLVED" : "REVEALED", "Original screenshot, without distortion",
+      won ? "correct" : "wrong");
+  }
+
   function updateShell() {
     menuPickerMark();
     modePicker.hidden = challenge !== "classic";
@@ -571,6 +674,7 @@
   }
   function resetGame() {
     clearBoard();
+    clearAnswerReveal();
     ++epoch;
     currentRound = null;
     pending = [];
@@ -601,6 +705,7 @@
     if (challenge === "daily") {
       dailyPlan = dailySchedule();
       dailyAnswers = readDaily();
+      dailyGuesses = readDailyGuesses();
       answered = dailyAnswers.length;
       score = dailyAnswers.filter(Boolean).length;
       scoreEl.textContent = String(score);
@@ -937,7 +1042,10 @@
     feedback.textContent = message;
     closeSuggestions();
     if (!fourEnabled() && challenge !== "timeline") button.disabled = false;
-    if (challenge !== "daily" && challenge !== "communityle") checkBoard(finalScore);
+    if (challenge !== "daily" && challenge !== "communityle") {
+      showAnswerRevealForRound(!message.startsWith("Game over"));
+      checkBoard(finalScore);
+    }
   }
   function finishDaily() {
     gameOver = true;
@@ -949,6 +1057,7 @@
     feedback.textContent = summary;
     progressDetail.textContent = dailyDate() + " (UTC) · 5 / 5";
     restart.hidden = true;
+    showDailyAnswerReveal();
     checkBoard(score);
   }
   function advance() {
@@ -985,6 +1094,7 @@
     answered++;
     if (challenge === "daily") {
       dailyAnswers.push(correct);
+      dailyGuesses.push(typeof value === "string" ? value : null);
       saveDaily();
       if (correct) { score++; setHigh(); }
       scoreEl.textContent = String(score);
