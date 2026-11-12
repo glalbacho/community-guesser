@@ -30,3 +30,49 @@ button.guess{display:block;margin:17px auto 8px;padding:19px 36px;background:var
 footer{width:min(100% - 48px,900px);margin:48px auto 0;padding:24px 0 32px;border-top:1px solid #383a42}footer a{font-size:14px;color:#969ba6;text-decoration:none}footer a:hover{text-decoration:underline}
 .legal{width:min(100% - 48px,900px);margin:0 auto;flex:1}.legal h1{font-size:42px;margin:42px 0 18px}.card{padding:24px;background:#24272e;border:1px solid #343943;border-radius:14px}.card p{font-size:18px;line-height:1.6}.card a{color:#7aa2f7}details{margin-top:26px}summary{cursor:pointer;font-weight:600;font-size:22px}details p{margin:14px 0 0}
 @media(max-width:600px){header h1{font-size:22px}.game{width:calc(100% - 20px)}#episode-input{font-size:17px}.suggestions{max-height:185px}.legal h1{font-size:34px}}
+
+
+/* Challenge selection, additional modes and responsive controls. */
+[hidden]{display:none!important}
+button,select,input{font-family:inherit}
+.menu-toggle{position:fixed;left:max(14px,env(safe-area-inset-left));top:14px;z-index:50;width:46px;height:46px;border:1px solid #53535b;border-radius:12px;background:rgba(36,36,43,.88);color:#fff;font-size:24px;cursor:pointer;backdrop-filter:blur(12px)}
+.menu-toggle:hover,.menu-close:hover{background:#444551}
+.menu-toggle:focus-visible,.challenge-link:focus-visible,.menu-close:focus-visible,button:focus-visible{outline:2px solid #8cb9ff;outline-offset:3px}
+.menu-backdrop{position:fixed;inset:0;z-index:55;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
+.challenge-menu{position:fixed;inset:0 auto 0 0;z-index:60;width:min(350px,90vw);padding:28px 19px calc(28px + env(safe-area-inset-bottom));background:rgba(28,29,36,.96);backdrop-filter:blur(22px);border-right:1px solid #52515c;box-shadow:18px 0 40px #0006;overflow-y:auto;transform:translateX(-110%);visibility:hidden;transition:transform .24s ease,visibility .24s}
+.challenge-menu.open{transform:translateX(0);visibility:visible}
+.menu-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.menu-head h2{font-size:27px;margin:4px 0}
+.menu-eyebrow{font-size:10px;letter-spacing:.19em;color:#a6a9b6;font-weight:700}
+.menu-close{border:1px solid #555861;background:#30313a;color:#fff;width:38px;height:38px;border-radius:11px;font-size:28px;cursor:pointer}
+.menu-intro{color:#b7b6c1;margin:8px 0 20px;font-size:14px}
+.challenge-list{display:flex;flex-direction:column;gap:8px}
+.challenge-link{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;padding:13px 14px;background:#292a34;color:#f1f1f6;border:1px solid transparent;border-radius:11px;text-align:left;cursor:pointer}
+.challenge-link:hover{background:#393b47}.challenge-link.active{background:#2a3e5c;border-color:#709ed9}
+.challenge-link span{font-size:16px;font-weight:700}.challenge-link small{font-size:11px;line-height:1.4;color:#bbc1cc}
+.challenge-subtitle{margin:5px 0 0;font-size:14px;color:#b5b8c1}
+.challenge-tools{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;margin:10px auto}
+.challenge-tools label{font-size:13px;color:#ddd}
+.challenge-tools select{background:#292830;color:#fff;border:1px solid #77717f;border-radius:8px;margin-left:6px;padding:8px}
+.progress-detail{font-size:13px;font-weight:600;color:#c3c7d0}
+.reveal-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 10px;background:#292830;border:1px solid #484754;border-radius:10px;padding:10px 14px}
+#reveal-label{font-size:14px;color:#e2e6ee;font-variant-numeric:tabular-nums}
+#reveal-next,.primary-action,.restart-challenge{background:#355c92;color:white;border:1px solid #6088bb;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer}
+#reveal-next:hover:not(:disabled),.primary-action:hover:not(:disabled),.restart-challenge:hover{background:#4976b4}
+#reveal-next:disabled{opacity:.5;cursor:default}
+.four-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.four-choices button{padding:14px 11px;min-height:58px;border-radius:10px;background:#292830;border:1px solid #77717f;color:#fff;cursor:pointer;font-size:13px;line-height:1.4;text-align:center}
+.four-choices button:hover:not(:disabled){background:#3e4553}
+.four-choices button:disabled{opacity:.65}
+.timeline-board{margin:0 0 16px}
+.timeline-board>p{font-size:14px;color:#c3c4ce;line-height:1.5}
+.timeline-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.timeline-card{min-width:0;display:flex;flex-direction:column;gap:8px;align-items:center;background:#26272d;color:#fff;border:2px solid #52545f;border-radius:12px;padding:7px;cursor:pointer}
+.timeline-card.selected{border-color:#83b5ff;background:#2c3b51}
+.timeline-card img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#18191d;border-radius:7px}
+.timeline-card span{font-size:12px;color:#d7d9e2}
+.timeline-board .primary-action{margin:4px auto 0}
+.restart-challenge{display:block;margin:14px auto}
+.frame-viewer .placeholder img{max-width:100%;max-height:100%;display:block}
+.frame-viewer .placeholder canvas{max-width:100%;max-height:100%;display:block;image-rendering:pixelated}
+@media(min-width:1100px){.menu-toggle{left:24px;top:22px}}
+@media(max-width:600px){.menu-toggle{top:9px;left:9px;width:40px;height:40px;font-size:21px}.game header{padding-left:48px;padding-right:48px}.four-choices{grid-template-columns:1fr}.timeline-cards{gap:6px}.timeline-card{padding:4px;border-radius:8px}.timeline-card span{font-size:10px}.challenge-menu{width:min(340px,93vw)}}
