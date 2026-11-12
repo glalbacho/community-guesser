@@ -28,6 +28,9 @@
   const customStart = $("custom-start"), customError = $("custom-error");
   const openOptions = $("open-options"), optionsPanel = $("options-panel");
   const optionShowOnFocus = $("option-show-on-focus"), optionAutoFocus = $("option-auto-focus");
+  const board = $("leaderboard"), boardStatus = $("leaderboard-status"), boardForm = $("leaderboard-form");
+  const boardName = $("leaderboard-name"), boardSubmit = $("leaderboard-submit"), boardList = $("leaderboard-list");
+  let boardRequest = 0, boardMode = "", boardScore = 0;
   const optionsKey = "community-guesser-options-v1";
   const customKey = "community-guesser-custom-v1";
   const modeKey = "community-guesser-mode";
@@ -110,6 +113,114 @@
   let choices = [], dailyAnswers = [], dailyPlan = [], awaitingNext = false;
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
+
+  // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
+  function boardKey() {
+    if (challenge === "classic") return "classic:" + mode;
+    if (challenge === "season") return "season:" + season;
+    if (challenge === "custom") return "custom:" + customLives + ":" + customSeasons.slice().sort((a,b)=>a-b).join("-");
+    if (challenge === "daily") return "daily:" + dailyDate();
+    if (challenge === "communityle") return "communityle:" + dailyDate();
+    return "challenge:" + challenge;
+  }
+  function boardMinimum() {
+    return challenge === "classic" ? (mode === "easy" ? 15 : 10) : 1;
+  }
+  function scoreDescription(points) {
+    return challenge === "communityle" ? (7 - points) + " guesses" : points + " points";
+  }
+  function clearBoard() {
+    ++boardRequest;
+    board.hidden = true;
+    boardForm.hidden = true;
+    boardList.hidden = true;
+    boardList.replaceChildren();
+    boardStatus.textContent = "";
+    boardName.value = "";
+    boardSubmit.disabled = false;
+    boardMode = "";
+    boardScore = 0;
+  }
+  function displayBoard(entries) {
+    boardList.replaceChildren();
+    entries.forEach((entry,index) => {
+      const item = document.createElement("li");
+      const identity = document.createElement("span");
+      identity.className = "leaderboard-rank";
+      const rank = document.createElement("strong");
+      rank.textContent = "#" + (index + 1);
+      const name = document.createElement("span");
+      name.textContent = entry.name;
+      identity.appendChild(rank); identity.appendChild(name);
+      const points = document.createElement("span");
+      points.className = "leaderboard-points";
+      points.textContent = scoreDescription(entry.score);
+      item.appendChild(identity); item.appendChild(points);
+      boardList.appendChild(item);
+    });
+    boardList.hidden = entries.length === 0;
+  }
+  async function checkBoard(finalScore) {
+    clearBoard();
+    const requestVersion = boardRequest;
+    boardMode = boardKey();
+    boardScore = finalScore;
+    board.hidden = false;
+    boardStatus.textContent = "Checking the website Top 3…";
+    try {
+      const response = await fetch("/api/leaderboard?mode=" + encodeURIComponent(boardMode),{cache:"no-store"});
+      if (!response.ok) throw new Error("Unavailable");
+      const result = await response.json();
+      if (requestVersion !== boardRequest) return;
+      if (!Array.isArray(result.entries)) throw new Error("Invalid response");
+      const entries = result.entries;
+      const qualifies = finalScore >= boardMinimum() && (entries.length < 3 || finalScore > entries[2].score);
+      if (qualifies) {
+        boardStatus.textContent = "You made the website Top 3! Choose a nickname.";
+        boardForm.hidden = false;
+      } else {
+        boardStatus.textContent = finalScore < boardMinimum()
+          ? "At least " + boardMinimum() + " points are needed to enter this mode's Top 3."
+          : "Your score did not reach the website Top 3.";
+        displayBoard(entries);
+      }
+    } catch (_) {
+      if (requestVersion !== boardRequest) return;
+      boardStatus.textContent = "Website Top 3 unavailable until the leaderboard database is connected. Your local high score remains saved.";
+    }
+  }
+  boardForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (boardForm.hidden || !boardMode) return;
+    const name = boardName.value.trim();
+    if (!/^[\\p{L}\\p{N} _.-]{2,20}$/u.test(name)) {
+      boardStatus.textContent = "Use 2–20 letters, numbers, spaces, dots, underscores or hyphens.";
+      return;
+    }
+    const requestVersion = boardRequest;
+    boardSubmit.disabled = true;
+    boardStatus.textContent = "Saving your result…";
+    try {
+      const response = await fetch("/api/leaderboard", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({mode:boardMode,name,score:boardScore})
+      });
+      const result = await response.json();
+      if (requestVersion !== boardRequest) return;
+      if (!response.ok || !result.accepted || !Array.isArray(result.entries)) {
+        boardStatus.textContent = result.error || "This score is no longer in the Top 3.";
+        boardSubmit.disabled = false;
+        return;
+      }
+      boardForm.hidden = true;
+      boardStatus.textContent = "You're in the website Top 3!";
+      displayBoard(result.entries);
+    } catch (_) {
+      if (requestVersion !== boardRequest) return;
+      boardSubmit.disabled = false;
+      boardStatus.textContent = "Could not submit your score. Please retry.";
+    }
+  });
 
   function modeHighKey() {
     return "community-guesser-high-score-" +
@@ -241,6 +352,7 @@
       ? "Community-le solved in " + communityleHistory.length + " / 6 guesses!"
       : "No guesses left. The episode was " + label(byId[communityleSolution.id]) + ".";
     renderCommunityle();
+    checkBoard(won ? 7 - communityleHistory.length : 0);
   }
   function readDaily() {
     try {
@@ -418,6 +530,7 @@
     });
   }
   function resetGame() {
+    clearBoard();
     ++epoch;
     currentRound = null;
     pending = [];
@@ -761,7 +874,7 @@
     if (correct) answer(true);
     else answer(false, "Correct order: " + expected.map(id=>label(byId[id])).join(" → "));
   });
-  function finishGame(message) {
+  function finishGame(message, finalScore = score) {
     gameOver = true;
     input.disabled = true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
@@ -773,6 +886,7 @@
     feedback.textContent = message;
     closeSuggestions();
     if (challenge !== "four" && challenge !== "timeline") button.disabled = false;
+    if (challenge !== "daily" && challenge !== "communityle") checkBoard(finalScore);
   }
   function finishDaily() {
     gameOver = true;
@@ -784,6 +898,7 @@
     feedback.textContent = summary;
     progressDetail.textContent = dailyDate() + " (UTC) · 5 / 5";
     restart.hidden = true;
+    checkBoard(score);
   }
   function advance() {
     if (gameOver) return;
@@ -855,7 +970,7 @@
     score = 0;
     scoreEl.textContent = "0";
     let explanation = correction || (challenge === "timeline" ? "" : "Correct answer: " + label(byId[currentRound.id]));
-    finishGame("Game over! " + explanation + " · Final score: " + last + ".");
+    finishGame("Game over! " + explanation + " · Final score: " + last + ".", last);
   }
   function resolveInput() {
     const matches = search(input.value);
