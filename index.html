@@ -88,6 +88,7 @@
         <div class="communityle-top"><span id="communityle-date">Daily puzzle</span><strong id="communityle-attempts">0 / 6 guesses</strong></div>
         <p class="communityle-tip">Guess the episode. <strong>Yellow</strong> means the season is right. Each wrong guess reveals a clearer picture.</p>
         <div class="communityle-guesses" id="communityle-guesses" aria-label="Six attempts"></div>
+        <button type="button" id="communityle-show-result" class="communityle-open-result" hidden>↗ Share my result</button>
       </section>
       <div id="reveal-controls" class="reveal-controls" hidden>
         <span id="reveal-label">Reveal 1 / 5</span><button type="button" id="reveal-next">Reveal more <span aria-hidden="true">›</span></button>
@@ -141,6 +142,23 @@
           <ol id="leaderboard-list" class="leaderboard-list" hidden></ol>
         </section>
     </main>
+    <div id="communityle-result-modal" class="communityle-result-modal" hidden>
+      <div class="communityle-result-backdrop" id="communityle-result-backdrop"></div>
+      <section class="communityle-result-dialog" role="dialog" aria-modal="true" aria-labelledby="communityle-result-title" aria-describedby="communityle-result-description" tabindex="-1">
+        <button type="button" id="communityle-result-close" class="communityle-result-close" aria-label="Close result">×</button>
+        <div class="communityle-result-eyebrow">COMMUNITY-LE · DAILY</div>
+        <h2 id="communityle-result-title">Today's result</h2>
+        <p id="communityle-result-description">Share your result without giving away the episode.</p>
+        <div id="communityle-result-score" class="communityle-result-score"></div>
+        <div id="communityle-result-grid" class="communityle-result-grid" aria-label="Guess results"></div>
+        <p class="communityle-result-invite">Think you know the episode? Try today's Community-le.</p>
+        <div class="communityle-result-actions">
+          <button type="button" id="communityle-result-share" class="communityle-result-share">↗ Share result</button>
+          <button type="button" id="communityle-result-copy" class="communityle-result-copy">Copy result</button>
+        </div>
+        <p id="communityle-result-status" class="communityle-result-status" role="status" aria-live="polite"></p>
+      </section>
+    </div>
     <section id="options-view" class="settings-view" aria-label="Settings" hidden>
       <button type="button" id="options-back" class="highscores-back">← Back to game</button>
       <span class="highscores-overline">COMMUNITY GUESSER</span>
