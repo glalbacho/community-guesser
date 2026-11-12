@@ -118,3 +118,21 @@ button,select,input{font-family:inherit}
 .communityle-guess.wrong-season{background:#363943;border-color:#555b69;color:#d1d3d9}
 .communityle-guess.empty{opacity:.55;border-style:dashed}
 @media(max-width:600px){.communityle-guess{font-size:12px;padding:9px 10px}.communityle-guess .guess-hint{font-size:11px}}
+
+/* Cloudflare-backed public leaderboard */
+.leaderboard{margin:20px auto 30px;padding:19px 18px;border:1px solid #536076;border-radius:14px;background:#252a34;text-align:left}
+.leaderboard-heading{display:flex;align-items:center;gap:10px}
+.leaderboard-heading span{font-size:24px}.leaderboard-heading h2{font-size:19px;margin:0}
+.leaderboard-status{color:#d2d6e2;font-size:13px;line-height:1.5;margin:12px 0}
+.leaderboard-form{margin:16px 0 10px}.leaderboard-form label{display:block;font-weight:700;font-size:14px;margin:0 0 10px}
+.leaderboard-entry{display:flex;gap:8px}.leaderboard-entry input{min-width:0;flex:1;background:#191c23;border:1px solid #79849b;color:white;border-radius:9px;padding:11px;font-size:15px}
+.leaderboard-entry button{background:#3f679d;border:1px solid #659ad9;border-radius:9px;color:white;padding:11px 14px;font-weight:700;cursor:pointer}
+.leaderboard-entry button:disabled{opacity:.55;cursor:default}
+.leaderboard-note{font-size:11px;color:#b0b9c8;line-height:1.45}
+.leaderboard-list{margin:10px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.leaderboard-list li{display:flex;justify-content:space-between;gap:12px;align-items:center;background:#343b48;border:1px solid #555f72;border-radius:10px;padding:11px 12px;font-size:14px}
+.leaderboard-list li:first-child{background:#423d30;border-color:#b09a52}
+.leaderboard-list li:nth-child(2){border-color:#95a4b5}.leaderboard-list li:nth-child(3){border-color:#a27c5b}
+.leaderboard-rank{display:flex;gap:10px;align-items:center;min-width:0;overflow-wrap:anywhere}.leaderboard-rank strong{color:#e3c979}
+.leaderboard-points{white-space:nowrap;font-weight:700;font-variant-numeric:tabular-nums}
+@media(max-width:400px){.leaderboard-entry{flex-direction:column}}
