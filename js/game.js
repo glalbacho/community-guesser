@@ -74,7 +74,7 @@
   const challengeNames = {
     classic: "Classic game", progressive: "Progressive Reveal",
     four: "Four Choices", timeline: "Timeline Challenge",
-    survival: "Survival Mode", one110: "One Life, 110",
+    one110: "One Life, 110",
     season: "Season Challenge", daily: "Daily Challenge", custom: "Custom Game",
     communityle: "Community-le"
   };
@@ -838,7 +838,7 @@
       ...[1,2,3,4,5,6].map(s=>["season:"+s,"Season "+s]),
       ["challenge:one110","One Life, 110"],["challenge:four","Four Choices"],
       ["challenge:timeline","Timeline Challenge"],["challenge:progressive","Progressive Reveal"],
-      ["challenge:survival","Survival Mode"],["daily:"+dailyDate(),"Daily Challenge · Today"],
+      ["daily:"+dailyDate(),"Daily Challenge · Today"],
       ["communityle:"+dailyDate(),"Community-le · Today"]
     ];
     const key="custom:"+customLives+":"+customSeasons.slice().sort((a,b)=>a-b).join("-")+":"+customFeatureFlags();
@@ -960,7 +960,11 @@
     }
     if(name==="season"&&/^[1-6]$/.test(parts[1]))season=Number(parts[1]);
     if(challengeNames[name] && name!=="classic")challenge=name;
-    else challenge="classic";
+    else {
+      challenge="classic";
+      // Retired routes (including #/survival) now lead to Classic.
+      if(name==="survival")setRoute("");
+    }
     if(challenge==="custom")customStarted=false;
     resetGame();
     activeView="game";
@@ -988,8 +992,8 @@
     challengeSubtitle.hidden = challenge === "classic";
     challengeSubtitle.textContent = challengeNames[challenge] || "";
     seasonLabel.hidden = challenge !== "season";
-    challengeTools.hidden = challenge !== "season" && challenge !== "survival" &&
-      challenge !== "one110" && challenge !== "daily" && challenge !== "custom";
+    challengeTools.hidden = challenge !== "season" && challenge !== "one110" &&
+      challenge !== "daily" && challenge !== "custom";
     frameViewer.hidden = challenge === "timeline" || (challenge === "custom" && !customStarted);
     timelineBoard.hidden = challenge !== "timeline";
     textAnswer.hidden = fourEnabled() || challenge === "timeline" ||
@@ -1228,7 +1232,6 @@
   }
   function updateProgress() {
     let message = "";
-    if (challenge === "survival") message = "Lives: " + lives + " / 3 · " + score + " correct";
     if (challenge === "custom") message = "Lives: " + lives + " / " + customLives +
       " · " + customSeasons.map(n => "S" + n).join(", ") +
       (customHas("once") ? " · " + answered + " / " + episodePool().length : "") +
@@ -1781,7 +1784,7 @@
       if (autoFocusInput && !gameOver && !textAnswer.hidden) input.focus();
       return;
     }
-    if (challenge === "survival" || challenge === "custom") {
+    if (challenge === "custom") {
       lives--;
       if (lives > 0) {
         pauseAfterWrongAnswer("Wrong! Correct answer: " + label(byId[currentRound.id]) +
