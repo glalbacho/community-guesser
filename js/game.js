@@ -81,6 +81,7 @@
   let customLives = 3, customSeasons = [1,2,3,4,5,6], customStarted = false;
   let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false};
   let showOnFocus = true, autoFocusInput = false, timelineSpeed = "slow";
+  let fullEpisodeListOpened = false, inputWasFocusedOnPointerDown = false;
   try {
     const savedOptions = JSON.parse(localStorage.getItem(optionsKey) || "{}");
     if (typeof savedOptions.showOnFocus === "boolean") showOnFocus = savedOptions.showOnFocus;
@@ -849,6 +850,8 @@
     timelineBoard.classList.remove("reordering","solved","incorrect");
     clearBoard();
     clearAnswerReveal();
+    fullEpisodeListOpened = false;
+    inputWasFocusedOnPointerDown = false;
     ++epoch;
     currentRound = null;
     pending = [];
@@ -991,6 +994,10 @@
     timelineSelection = -1; awaitingNext = false;
     input.value = ""; input.disabled = false; button.disabled = false; button.hidden = false; button.textContent = "Guess";
     closeSuggestions();
+    // Only a list explicitly opened by the player persists across rounds.
+    // Simply focusing the input or typing a search never enables this.
+    if (fullEpisodeListOpened && showOnFocus && !fourEnabled() &&
+        challenge !== "timeline" && !gameOver) renderSuggestions();
     feedback.textContent = "";
     if (challenge === "timeline") {
       // Choose three distinct episodes, including when a normal queue would
@@ -1580,13 +1587,31 @@
   });
   // Legacy standalone replay control is kept hidden for compatibility.
   restart.addEventListener("click", () => { if (challenge !== "daily") resetGame(); });
+  // First click only focuses the field. A subsequent click while it is
+  // already focused explicitly opens the full episode picker.
+  input.addEventListener("pointerdown", () => {
+    inputWasFocusedOnPointerDown = document.activeElement === input;
+  });
   input.addEventListener("focus", () => {
-    if (showOnFocus || input.value.trim()) renderSuggestions();
+    // Do not open the full catalogue from focus (including auto-focus).
+  });
+  input.addEventListener("click", () => {
+    if (gameOver) return;
+    if (inputWasFocusedOnPointerDown && !input.value.trim()) {
+      fullEpisodeListOpened = true;
+      renderSuggestions();
+    }
+    inputWasFocusedOnPointerDown = false;
   });
   input.addEventListener("input", () => {
     selected = null; feedback.textContent = "";
-    if (!showOnFocus && !input.value.trim()) closeSuggestions();
-    else renderSuggestions();
+    if (input.value.trim()) {
+      renderSuggestions();
+    } else if (fullEpisodeListOpened && showOnFocus) {
+      renderSuggestions();
+    } else {
+      closeSuggestions();
+    }
   });
   input.addEventListener("keydown", event => {
     if (event.key === "Escape") { closeSuggestions(); return; }
