@@ -109,25 +109,30 @@
   }
   function displayLabel(ep) { return challenge === "classic" && (mode === "hard" || mode === "impossible") ? ep.id : label(ep); }
 
+  function candidateEpisodes() {
+    return challenge === "season" ? episodes.filter(ep => seasonNumber(ep) === season) : episodes;
+  }
+
   function search(value) {
+    const available = candidateEpisodes();
     const query = value.trim();
     // Empty and lone separator characters are intermediate inputs, not failed searches.
-    if (!query || /^[sxe]$/i.test(query)) return episodes;
+    if (!query || /^[sxe]$/i.test(query)) return available;
 
     // E1 / x1 means *episode 1*, not episodes 10–19.
     const byEpisode = query.match(/^[ex]\s*(\d*)$/i);
     if (byEpisode) {
       const n = byEpisode[1];
-      if (!n) return episodes;
-      if (/^0+$/.test(n)) return episodes.filter(ep => episodeNumber(ep) < 10);
-      return episodes.filter(ep => episodeNumber(ep) === Number(n) && Number(n) > 0);
+      if (!n) return available;
+      if (/^0+$/.test(n)) return available.filter(ep => episodeNumber(ep) < 10);
+      return available.filter(ep => episodeNumber(ep) === Number(n) && Number(n) > 0);
     }
 
     // S1, S01, S1E, S1E3, S01 E 03, S1 x 03.
     const prefixed = query.match(/^s\s*(\d+)(?:\s*[ex]\s*(\d*))?$/i);
     if (prefixed) {
       const sn = prefixed[1], en = prefixed[2];
-      if (!sn || Number(sn) === 0) return episodes;
+      if (!sn || Number(sn) === 0) return available;
       return filterNumbers(Number(sn), en);
     }
 
@@ -144,17 +149,17 @@
     if (bareSeason) {
       const n = Number(bareSeason[1]);
       return n === 0
-        ? episodes
-        : episodes.filter(ep => seasonNumber(ep) === n);
+        ? available
+        : available.filter(ep => seasonNumber(ep) === n);
     }
 
     // Existing episode-title search.
     const normalized = normalize(query);
-    return episodes.filter(ep => normalize(label(ep)).includes(normalized));
+    return available.filter(ep => normalize(label(ep)).includes(normalized));
   }
 
   function filterNumbers(season, episodeText) {
-    return episodes.filter(ep => {
+    return candidateEpisodes().filter(ep => {
       if (seasonNumber(ep) !== season) return false;
       if (episodeText === undefined || episodeText === "") return true;
       // While entering 03, show E01–E09 after typing only the first zero.
@@ -630,7 +635,10 @@
   function resolveInput() {
     const matches = search(input.value);
     const candidate = selected || (matches.length === 1 ? matches[0] : null);
-    if (!candidate) { feedback.textContent = "Select an episode from the list."; return; }
+    if (!candidate || (challenge === "season" && seasonNumber(candidate) !== season)) {
+      feedback.textContent = "Select an episode from the list.";
+      return;
+    }
     answer(candidate.id);
   }
   form.addEventListener("submit", event => {
