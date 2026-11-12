@@ -1349,7 +1349,9 @@
     updateProgress();
   }
   function moveFrame(direction) {
-    if (!threeEnabled() || !currentRound || gameOver) return;
+    // Allow reviewing all three screenshots even after a loss or while
+    // the correct answer is shown before Next. No new guesses are enabled.
+    if (!threeEnabled() || !currentRound) return;
     const next = currentFrame + direction;
     if (next < 0 || next >= currentRound.frames.length) return;
     currentFrame = next; displayFrame();
@@ -1371,7 +1373,7 @@
   document.addEventListener("keydown", event => {
     if (event.altKey || event.ctrlKey || event.metaKey || menu.classList.contains("open")) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    if (!threeEnabled() || !currentRound || gameOver) return;
+    if (!threeEnabled() || !currentRound) return;
     // Left/right browse screenshots even while the answer input is focused.
     // The input text, selected episode and suggestions are left untouched.
     const target=event.target;
