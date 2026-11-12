@@ -17,6 +17,7 @@
       <p class="menu-intro">Choose how you want to play.</p>
       <nav class="challenge-list" aria-label="Choose a challenge">
         <button type="button" data-challenge="classic" class="challenge-link active"><span>Classic game</span><small>Easy · Normal · Hard · Impossible</small></button>
+        <button type="button" data-challenge="custom" class="challenge-link"><span>Custom Game</span><small>Choose seasons and 1–10 lives</small></button>
         <button type="button" data-challenge="season" class="challenge-link"><span>Season Challenge</span><small>Play one season at a time</small></button>
         <button type="button" data-challenge="daily" class="challenge-link"><span>Daily Challenge</span><small>Five shared screenshots every UTC day</small></button>
         <button type="button" data-challenge="one110" class="challenge-link"><span>One Life, 110</span><small>Every episode exactly once. One mistake ends it.</small></button>
@@ -25,9 +26,33 @@
         <button type="button" data-challenge="progressive" class="challenge-link"><span>Progressive Reveal</span><small>Sharpen the picture · fewer hints, more points</small></button>
         <button type="button" data-challenge="survival" class="challenge-link"><span>Survival Mode</span><small>Three lives, one long streak</small></button>
       </nav>
+      <button type="button" id="open-options" class="sidebar-options" aria-expanded="false" aria-controls="options-panel">⚙ &nbsp; Options</button>
+      <section id="options-panel" class="options-panel" hidden aria-label="Game options">
+        <h3>Game options</h3>
+        <label class="option-toggle"><input id="option-show-on-focus" type="checkbox" checked><span><strong>Show all episodes on focus</strong><small>Turn off to show suggestions only after typing.</small></span></label>
+        <label class="option-toggle"><input id="option-auto-focus" type="checkbox"><span><strong>Focus input after correct guess</strong><small>Useful for fast keyboard play.</small></span></label>
+      </section>
     </aside>
     <main class="game">
       <header><h1>Community Episode Guesser</h1><p id="challenge-subtitle" class="challenge-subtitle" hidden></p></header>
+      <section id="custom-setup" class="custom-setup" aria-label="Create a custom game" hidden>
+        <h2>Create your game</h2>
+        <div class="custom-field">
+          <label for="custom-lives">Lives <span id="custom-lives-display">3</span></label>
+          <input id="custom-lives" type="range" min="1" max="10" step="1" value="3" aria-label="Number of lives">
+          <div class="custom-range-labels"><span>1 life</span><span>10 lives</span></div>
+        </div>
+        <fieldset class="custom-seasons"><legend>Include seasons</legend>
+          <label><input type="checkbox" value="1" data-custom-season checked> Season 1</label>
+          <label><input type="checkbox" value="2" data-custom-season checked> Season 2</label>
+          <label><input type="checkbox" value="3" data-custom-season checked> Season 3</label>
+          <label><input type="checkbox" value="4" data-custom-season checked> Season 4</label>
+          <label><input type="checkbox" value="5" data-custom-season checked> Season 5</label>
+          <label><input type="checkbox" value="6" data-custom-season checked> Season 6</label>
+        </fieldset>
+        <p id="custom-error" class="custom-error" role="alert" hidden>Choose at least one season.</p>
+        <div class="custom-actions"><button type="button" id="custom-start" class="primary-action">Start custom game</button></div>
+      </section>
       <div id="challenge-tools" class="challenge-tools" hidden>
         <label id="season-label" for="season-select" hidden>Season <select id="season-select" aria-label="Choose a season">
           <option value="1">Season 1</option><option value="2">Season 2</option><option value="3">Season 3</option><option value="4">Season 4</option><option value="5">Season 5</option><option value="6">Season 6</option>
