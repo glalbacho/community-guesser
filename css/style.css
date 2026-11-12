@@ -252,3 +252,13 @@ button,select,input{font-family:inherit}
 .timeline-board.incorrect .timeline-track span{background:#923d48;border-color:#db8585}
 .timeline-board.incorrect .timeline-instructions p{color:#fac3c3}
 .timeline-card.is-incorrect img{opacity:.98}
+
+/* Standalone settings view and one replay button */
+.settings-view{width:min(100% - 32px,650px);margin:0 auto;padding:30px 0 70px}
+.settings-view h2{font-size:clamp(30px,5vw,42px);margin:8px 0}
+.settings-description{font-size:14px;color:#bec9d8;line-height:1.5}
+.settings-view .options-panel{margin:22px 0 0;background:#262e3b;border:1px solid #526178;border-radius:16px;padding:22px}
+.settings-view .options-panel h3{font-size:18px;margin-bottom:17px}
+.settings-view .option-toggle{padding:11px 0}
+.settings-view .timeline-speed-setting{border-top:1px solid #4d5765;padding-top:18px}
+#guess-btn[hidden],#restart-challenge[hidden],.answer-reveal[hidden],.settings-view[hidden],.highscores-view[hidden]{display:none!important}
