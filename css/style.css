@@ -262,3 +262,9 @@ button,select,input{font-family:inherit}
 .settings-view .option-toggle{padding:11px 0}
 .settings-view .timeline-speed-setting{border-top:1px solid #4d5765;padding-top:18px}
 #guess-btn[hidden],#restart-challenge[hidden],.answer-reveal[hidden],.settings-view[hidden],.highscores-view[hidden]{display:none!important}
+
+/* Replay replaces the existing primary action, never adds a button below. */
+#text-answer.replay-only .search-wrap{display:none!important}
+#text-answer.replay-only #guess-btn{display:block}
+#feedback.is-wrong{color:#f0a2a5}
+#feedback.is-correct{color:#a6d9b7}
