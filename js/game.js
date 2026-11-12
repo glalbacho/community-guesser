@@ -22,6 +22,12 @@
   const communityleAttempts = $("communityle-attempts"), communityleGuesses = $("communityle-guesses");
   const timelineBoard = $("timeline-board"), timelineCards = $("timeline-cards");
   const timelineSubmit = $("timeline-submit"), restart = $("restart-challenge");
+  const timelineInstruction = $("timeline-instruction");
+  const highscoresView = $("highscores-view"), highscoresGrid = $("highscores-grid");
+  const highscoresStatus = $("highscores-status"), highscoresOpen = $("show-all-highscores");
+  const highscoresBack = $("highscores-back"), highscoresRefresh = $("highscores-refresh");
+  const gameView = document.querySelector("main.game");
+  let highscoresOpenState = false, highscoresFetchVersion = 0;
   const customSetup = $("custom-setup"), customLivesInput = $("custom-lives");
   const customLivesDisplay = $("custom-lives-display");
   const customSeasonInputs = Array.from(document.querySelectorAll("[data-custom-season]"));
@@ -150,6 +156,7 @@
   let choices = [], dailyAnswers = [], dailyGuesses = [], dailyPlan = [], awaitingNext = false;
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
+  let timelineDragging = null, timelineRevealed = false;
 
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
@@ -635,6 +642,96 @@
       won ? "correct" : "wrong");
   }
 
+  // A single read-only Hall of Fame. It never treats local browser scores
+  // as global results when the D1 binding is not configured.
+  function publicScoreboards() {
+    const basic=[
+      ["classic:easy","Easy Mode"],["classic:normal","Normal Mode"],
+      ["classic:hard","Hard Mode"],["classic:impossible","Impossible Mode"],
+      ...[1,2,3,4,5,6].map(s=>["season:"+s,"Season "+s]),
+      ["challenge:one110","One Life, 110"],["challenge:four","Four Choices"],
+      ["challenge:timeline","Timeline Challenge"],["challenge:progressive","Progressive Reveal"],
+      ["challenge:survival","Survival Mode"],["daily:"+dailyDate(),"Daily Challenge · Today"],
+      ["communityle:"+dailyDate(),"Community-le · Today"]
+    ];
+    const key="custom:"+customLives+":"+customSeasons.slice().sort((a,b)=>a-b).join("-")+":"+customFeatureFlags();
+    return [...basic,[key,"Custom Game · saved settings"]];
+  }
+  function publicScoreboardName(mode) {
+    const known=publicScoreboards().find(row=>row[0]===mode);
+    if(known)return known[1];
+    if(mode.startsWith("custom:")) {
+      const fields=mode.split(":");
+      return "Custom Game · "+fields[1]+" lives · Seasons "+fields[2].replaceAll("-",", ");
+    }
+    if(mode.startsWith("daily:"))return "Daily Challenge · "+mode.slice(6);
+    if(mode.startsWith("communityle:"))return "Community-le · "+mode.slice(12);
+    return mode;
+  }
+  function showHighscoreCards(boards) {
+    highscoresGrid.replaceChildren();
+    boards.forEach(board=>{
+      const card=document.createElement("article");
+      card.className="highscores-card";
+      const title=document.createElement("h3"); title.textContent=board.name;
+      const caption=document.createElement("p"); caption.className="highscores-card-sub";
+      caption.textContent=board.mode==="classic:easy"?"Minimum 15 points":
+        board.mode.startsWith("classic:")?"Minimum 10 points":"Website Top 3";
+      card.appendChild(title);card.appendChild(caption);
+      if(!board.entries.length){
+        const empty=document.createElement("p");empty.className="hs-empty";
+        empty.textContent="No records yet";card.appendChild(empty);
+      }else{
+        const list=document.createElement("ol");
+        board.entries.slice(0,3).forEach((entry,i)=>{
+          const li=document.createElement("li");
+          const name=document.createElement("span"); name.className="hs-name";
+          name.textContent="#"+(i+1)+"  "+entry.name;
+          const points=document.createElement("span");points.className="hs-points";
+          points.textContent=board.mode.startsWith("communityle:")?(7-entry.score)+" guesses":entry.score+" pts";
+          li.appendChild(name);li.appendChild(points);list.appendChild(li);
+        });
+        card.appendChild(list);
+      }
+      highscoresGrid.appendChild(card);
+    });
+  }
+  async function loadAllHighscores() {
+    const requestVersion=++highscoresFetchVersion;
+    highscoresStatus.textContent="Loading website rankings…";
+    highscoresGrid.replaceChildren();
+    try{
+      const response=await fetch("/api/leaderboard?catalog=1",{cache:"no-store"});
+      if(!response.ok)throw new Error("Not configured");
+      const data=await response.json();
+      if(requestVersion!==highscoresFetchVersion||!highscoresOpenState)return;
+      if(!Array.isArray(data.boards))throw new Error("Bad response");
+      const available=new Map(data.boards.map(entry=>[entry.mode,entry.entries]));
+      const basic=publicScoreboards();
+      const existing=new Set(basic.map(item=>item[0]));
+      const more=data.boards.filter(entry=>!existing.has(entry.mode))
+        .map(entry=>[entry.mode,publicScoreboardName(entry.mode)]);
+      showHighscoreCards([...basic,...more].map(([mode,name])=>({
+        mode,name,entries:available.get(mode)||[]
+      })));
+      highscoresStatus.textContent="Website Top 3 by mode · "+data.boards.length+" rankings with scores.";
+    }catch(_){
+      if(requestVersion!==highscoresFetchVersion||!highscoresOpenState)return;
+      highscoresGrid.replaceChildren();
+      highscoresStatus.textContent="Website-wide high scores are not available yet. Connect the Cloudflare D1 database to activate the rankings.";
+    }
+  }
+  function toggleHighscores(open) {
+    highscoresOpenState=open;
+    if(!open)highscoresFetchVersion++;
+    gameView.hidden=open;
+    highscoresView.hidden=!open;
+    if(open){openMenu(false);loadAllHighscores();}
+  }
+  highscoresOpen.addEventListener("click",()=>toggleHighscores(true));
+  highscoresBack.addEventListener("click",()=>toggleHighscores(false));
+  highscoresRefresh.addEventListener("click",()=>{if(highscoresOpenState)loadAllHighscores();});
+
   function updateShell() {
     menuPickerMark();
     modePicker.hidden = challenge !== "classic";
@@ -673,6 +770,9 @@
     });
   }
   function resetGame() {
+    timelineRevealed=false;
+    timelineSubmit.hidden=false;
+    timelineSubmit.disabled=false;
     clearBoard();
     clearAnswerReveal();
     ++epoch;
@@ -993,42 +1093,158 @@
       fourChoices.appendChild(b);
     });
   }
-  function renderTimeline() {
-    timelineCards.replaceChildren();
-    timelineOrder.forEach((id,i) => {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "timeline-card";
-      b.classList.toggle("selected", timelineSelection === i);
-      b.setAttribute("aria-label", "Position " + (i + 1) + ", select to swap");
-      const img = document.createElement("img");
-      const urls = imagePool[id];
-      // The picture remains the same as the user reorders the cards.
-      const stored = currentRound["timelineImage-" + id] ||
-        (currentRound["timelineImage-" + id] = urls[Math.floor(Math.random() * urls.length)]);
-      img.src = stored; img.alt = "Unknown Community episode screenshot";
-      const caption = document.createElement("span");
-      caption.textContent = (i + 1) + " · " + (timelineSelection === i ? "Selected" : "Tap to swap");
-      b.appendChild(img); b.appendChild(caption);
-      b.addEventListener("click", () => {
-        if (gameOver) return;
-        if (timelineSelection === -1) timelineSelection = i;
-        else if (timelineSelection === i) timelineSelection = -1;
-        else {
-          [timelineOrder[timelineSelection], timelineOrder[i]] =
-            [timelineOrder[i], timelineOrder[timelineSelection]];
-          timelineSelection = -1;
-        }
-        renderTimeline();
+  function timelineSortedIds() {
+    return currentRound.timeline.slice().sort((a,b)=>
+      episodes.findIndex(ep=>ep.id===a)-episodes.findIndex(ep=>ep.id===b));
+  }
+  function timelineCanReorder() { return challenge==="timeline" && !gameOver && !timelineRevealed; }
+  function animateTimelineOrder(ordered,animate=true) {
+    const oldRects=new Map();
+    if(animate && typeof timelineCards.querySelectorAll==="function") {
+      Array.from(timelineCards.children).forEach(card=>{
+        if(card.dataset && card.getBoundingClientRect)oldRects.set(card.dataset.episode,card.getBoundingClientRect());
       });
-      timelineCards.appendChild(b);
+    }
+    timelineOrder=ordered.slice();
+    // Reuse the nodes so screenshots stay loaded; animate their layout movement.
+    const nodes=new Map(Array.from(timelineCards.children).map(el=>[el.dataset.episode,el]));
+    for(const id of timelineOrder) {
+      const card=nodes.get(id);
+      if(card)timelineCards.appendChild(card);
+    }
+    if(animate) {
+      Array.from(timelineCards.children).forEach(card=>{
+        const before=oldRects.get(card.dataset.episode);
+        if(!before||!card.getBoundingClientRect||!card.animate)return;
+        const after=card.getBoundingClientRect();
+        const dx=before.left-after.left,dy=before.top-after.top;
+        if(Math.abs(dx)+Math.abs(dy)<2)return;
+        card.animate([{transform:"translate("+dx+"px,"+dy+"px)"},{transform:"translate(0,0)"}],
+          {duration:500,easing:"cubic-bezier(.2,.75,.25,1)"});
+      });
+    }
+    Array.from(timelineCards.children).forEach((card,i)=>{
+      const caption=card.querySelector(".timeline-handle");
+      if(caption)caption.textContent=(i+1)+" · Drag to reorder";
+      card.setAttribute("aria-label","Position "+(i+1)+", drag to reorder");
     });
   }
-  timelineSubmit.addEventListener("click", () => {
-    if (gameOver || challenge !== "timeline") return;
-    const expected = currentRound.timeline.slice().sort((a,b) => episodes.findIndex(e=>e.id===a) - episodes.findIndex(e=>e.id===b));
-    const correct = expected.every((id,i)=>id===timelineOrder[i]);
-    if (correct) answer(true);
-    else answer(false, "Correct order: " + expected.map(id=>label(byId[id])).join(" → "));
+  function moveTimelineCard(from,to) {
+    if(!timelineCanReorder()||from===to||from<0||to<0||
+       from>=timelineOrder.length||to>=timelineOrder.length)return;
+    const next=timelineOrder.slice();
+    const [moved]=next.splice(from,1);
+    next.splice(to,0,moved);
+    timelineSelection=-1;
+    animateTimelineOrder(next,true);
+  }
+  function renderTimeline() {
+    timelineCards.replaceChildren();
+    timelineRevealed=false;
+    timelineInstruction.textContent="Drag the images into broadcast order. On mobile, hold and move a card.";
+    timelineBoard.classList.remove("solved");
+    timelineOrder.forEach((id,i)=>{
+      const card=document.createElement("button");
+      card.type="button"; card.className="timeline-card";
+      card.dataset.episode=id;
+      card.setAttribute("aria-label","Position "+(i+1)+", drag to reorder");
+      const img=document.createElement("img");
+      const urls=imagePool[id];
+      const stored=currentRound["timelineImage-"+id]||
+        (currentRound["timelineImage-"+id]=urls[Math.floor(Math.random()*urls.length)]);
+      img.src=stored; img.alt="Unknown Community episode screenshot";
+      const caption=document.createElement("span");
+      caption.className="timeline-handle";caption.textContent=(i+1)+" · Drag to reorder";
+      card.appendChild(img);card.appendChild(caption);
+      card.addEventListener("pointerdown",event=>{
+        if(!timelineCanReorder()||event.button>0)return;
+        timelineDragging={id,startX:event.clientX,startY:event.clientY,active:false};
+        if(card.setPointerCapture)card.setPointerCapture(event.pointerId);
+      });
+      card.addEventListener("pointermove",event=>{
+        if(!timelineDragging||timelineDragging.id!==id||!timelineCanReorder())return;
+        const moved=Math.hypot(event.clientX-timelineDragging.startX,event.clientY-timelineDragging.startY);
+        if(moved>8)timelineDragging.active=true;
+        if(timelineDragging.active){
+          card.classList.add("dragging");
+          if(document.elementFromPoint){
+            const over=document.elementFromPoint(event.clientX,event.clientY);
+            const drop=over&&over.closest?over.closest(".timeline-card"):null;
+            Array.from(timelineCards.children).forEach(node=>node.classList.toggle("drag-over",drop===node&&node!==card));
+          }
+        }
+      });
+      const endDrag=event=>{
+        if(!timelineDragging||timelineDragging.id!==id)return;
+        const active=timelineDragging.active;
+        timelineDragging=null;
+        card.classList.remove("dragging");
+        Array.from(timelineCards.children).forEach(node=>node.classList.remove("drag-over"));
+        if(!active)return;
+        let destination=-1;
+        // Pointer capture keeps event.target on the dragged card, so find the
+        // target from the pointer coordinates instead of event.target.
+        Array.from(timelineCards.children).forEach((node,i)=>{
+          if(!node.getBoundingClientRect)return;
+          const rect=node.getBoundingClientRect();
+          if(event.clientX>=rect.left&&event.clientX<=rect.right&&
+             event.clientY>=rect.top&&event.clientY<=rect.bottom)destination=i;
+        });
+        if(destination>=0)moveTimelineCard(timelineOrder.indexOf(id),destination);
+      };
+      card.addEventListener("pointerup",endDrag);
+      card.addEventListener("pointercancel",()=>{timelineDragging=null;card.classList.remove("dragging");});
+      // Accessible fallback: select a card, then the destination position.
+      card.addEventListener("click",()=>{
+        if(!timelineCanReorder()||timelineDragging)return;
+        const position=timelineOrder.indexOf(id);
+        if(timelineSelection<0){
+          timelineSelection=position;
+          Array.from(timelineCards.children).forEach(el=>el.classList.toggle("selected",el===card));
+        }else{
+          const source=timelineSelection;
+          timelineSelection=-1;
+          Array.from(timelineCards.children).forEach(el=>el.classList.remove("selected"));
+          moveTimelineCard(source,position);
+        }
+      });
+      card.addEventListener("keydown",event=>{
+        if(!timelineCanReorder()||!event.altKey)return;
+        if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;
+        event.preventDefault();
+        const position=timelineOrder.indexOf(id);
+        moveTimelineCard(position,position+(event.key==="ArrowRight"?1:-1));
+        card.focus();
+      });
+      timelineCards.appendChild(card);
+    });
+  }
+  function revealTimelineInPlace(correct) {
+    timelineRevealed=true;
+    timelineDragging=null;
+    timelineSelection=-1;
+    const actual=timelineSortedIds();
+    animateTimelineOrder(actual,true);
+    timelineBoard.classList.add("solved");
+    timelineInstruction.textContent=correct
+      ?"Perfect! You placed the episodes in the correct order."
+      :"Here is the correct broadcast order — the cards moved into place.";
+    timelineSubmit.hidden=true;
+    Array.from(timelineCards.children).forEach((card,i)=>{
+      card.classList.add("is-solved");
+      card.disabled=true;
+      card.setAttribute("aria-label","Position "+(i+1)+": "+label(byId[actual[i]]));
+      const caption=card.querySelector(".timeline-handle");
+      if(caption){
+        caption.className="timeline-answer";
+        caption.textContent=label(byId[actual[i]]);
+      }
+    });
+  }
+  timelineSubmit.addEventListener("click",()=>{
+    if(gameOver||challenge!=="timeline")return;
+    const correct=timelineSortedIds().every((id,i)=>id===timelineOrder[i]);
+    answer(correct,correct?"":"The timeline was rearranged into the correct order.");
   });
   function finishGame(message, finalScore = score) {
     gameOver = true;
@@ -1043,7 +1259,12 @@
     closeSuggestions();
     if (!fourEnabled() && challenge !== "timeline") button.disabled = false;
     if (challenge !== "daily" && challenge !== "communityle") {
-      showAnswerRevealForRound(!message.startsWith("Game over"));
+      if(challenge==="timeline"){
+        // Keep the solution within the same timeline instead of below it.
+        revealTimelineInPlace(!message.startsWith("Game over"));
+      }else{
+        showAnswerRevealForRound(!message.startsWith("Game over"));
+      }
       checkBoard(finalScore);
     }
   }
