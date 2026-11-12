@@ -17,14 +17,16 @@
       <p class="menu-intro">Choose how you want to play.</p>
       <nav class="challenge-list" aria-label="Choose a challenge">
         <button type="button" data-challenge="classic" class="challenge-link active"><span>Classic game</span><small>Easy · Normal · Hard · Impossible</small></button>
-        <button type="button" data-challenge="custom" class="challenge-link"><span>Custom Game</span><small>Choose seasons and 1–10 lives</small></button>
         <button type="button" data-challenge="season" class="challenge-link"><span>Season Challenge</span><small>Play one season at a time</small></button>
         <button type="button" data-challenge="daily" class="challenge-link"><span>Daily Challenge</span><small>Five shared screenshots every UTC day</small></button>
+        <button type="button" data-challenge="communityle" class="challenge-link"><span>Community-le</span><small>Daily episode · 6 guesses · reveal the image</small></button>
         <button type="button" data-challenge="one110" class="challenge-link"><span>One Life, 110</span><small>Every episode exactly once. One mistake ends it.</small></button>
         <button type="button" data-challenge="four" class="challenge-link"><span>Four Choices</span><small>Pick the episode out of four</small></button>
         <button type="button" data-challenge="timeline" class="challenge-link"><span>Timeline Challenge</span><small>Put three episodes in broadcast order</small></button>
         <button type="button" data-challenge="progressive" class="challenge-link"><span>Progressive Reveal</span><small>Sharpen the picture · fewer hints, more points</small></button>
         <button type="button" data-challenge="survival" class="challenge-link"><span>Survival Mode</span><small>Three lives, one long streak</small></button>
+        <div class="challenge-divider" role="separator"><span>MAKE IT YOUR OWN</span><small>Or build a game with your own rules.</small></div>
+        <button type="button" data-challenge="custom" class="challenge-link custom-menu-link"><span>+ Custom Game</span><small>Choose seasons and 1–10 lives</small></button>
       </nav>
       <button type="button" id="open-options" class="sidebar-options" aria-expanded="false" aria-controls="options-panel">⚙ &nbsp; Options</button>
       <section id="options-panel" class="options-panel" hidden aria-label="Game options">
@@ -67,6 +69,11 @@
           <button type="button" class="frame-arrow" id="next-frame" aria-label="Next screenshot" title="Next screenshot"><span aria-hidden="true">&#8250;</span></button>
         </nav>
       </div>
+      <section id="communityle-board" class="communityle-board" aria-label="Community-le daily game" hidden>
+        <div class="communityle-top"><span id="communityle-date">Daily puzzle</span><strong id="communityle-attempts">0 / 6 guesses</strong></div>
+        <p class="communityle-tip">Guess the episode. <strong>Yellow</strong> means the season is right. Each wrong guess reveals a clearer picture.</p>
+        <div class="communityle-guesses" id="communityle-guesses" aria-label="Six attempts"></div>
+      </section>
       <div id="reveal-controls" class="reveal-controls" hidden>
         <span id="reveal-label">Reveal 1 / 5</span><button type="button" id="reveal-next">Reveal more <span aria-hidden="true">›</span></button>
       </div>
