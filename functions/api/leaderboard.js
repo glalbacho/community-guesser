@@ -5,7 +5,7 @@ const HEADERS = {"Content-Type":"application/json; charset=utf-8","Cache-Control
 const allowedMode = mode => typeof mode === "string" && (
   /^classic:(easy|normal|hard|impossible)$/.test(mode) ||
   /^season:[1-6]$/.test(mode) ||
-  /^challenge:(four|timeline|progressive|survival|one110)$/.test(mode) ||
+  /^challenge:(four|timeline|progressive|one110)$/.test(mode) ||
   /^custom:(10|[1-9]):[1-6](?:-[1-6]){0,5}(?::[01]{6})?$/.test(mode) ||
   /^(daily|communityle):\d{4}-\d{2}-\d{2}$/.test(mode)
 );
