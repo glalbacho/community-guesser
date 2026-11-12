@@ -34,6 +34,13 @@
         <h3>Game options</h3>
         <label class="option-toggle"><input id="option-show-on-focus" type="checkbox" checked><span><strong>Show all episodes on focus</strong><small>Turn off to show suggestions only after typing.</small></span></label>
         <label class="option-toggle"><input id="option-auto-focus" type="checkbox"><span><strong>Focus input after correct guess</strong><small>Useful for fast keyboard play.</small></span></label>
+        <label class="timeline-speed-setting" for="option-timeline-speed"><span><strong>Timeline animation speed</strong><small>Choose how quickly the cards reorder and reveal the answer.</small></span>
+          <select id="option-timeline-speed">
+            <option value="fast">Fast (0.3 s)</option>
+            <option value="normal">Normal (0.7 s)</option>
+            <option value="slow" selected>Slow (1.3 s)</option>
+          </select>
+        </label>
       </section>
     </aside>
     <main class="game">
@@ -99,7 +106,7 @@
       <section class="timeline-board" id="timeline-board" aria-label="Place screenshots in episode order" hidden>
         <div class="timeline-instructions">
           <span class="timeline-label">EARLIEST</span>
-          <p id="timeline-instruction">Drag the images into broadcast order. On mobile, hold and move a card.</p>
+          <p id="timeline-instruction">Drag any part of a card into broadcast order, then release it over another position.</p>
           <span class="timeline-label">LATEST</span>
         </div>
         <div class="timeline-track" aria-hidden="true"><span>1</span><span>2</span><span>3</span></div>
