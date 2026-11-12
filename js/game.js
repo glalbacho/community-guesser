@@ -193,7 +193,7 @@
     event.preventDefault();
     if (boardForm.hidden || !boardMode) return;
     const name = boardName.value.trim();
-    if (!/^[\\p{L}\\p{N} _.-]{2,20}$/u.test(name)) {
+    if (!/^[\p{L}\p{N} _.-]{2,20}$/u.test(name)) {
       boardStatus.textContent = "Use 2–20 letters, numbers, spaces, dots, underscores or hyphens.";
       return;
     }
