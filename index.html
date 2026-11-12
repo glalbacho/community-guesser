@@ -11,7 +11,14 @@
   <div class="page">
     <main class="game">
       <header><h1>Community Episode Guesser</h1></header>
-      <div class="placeholder" role="img" aria-label="Test image placeholder"><span>TEST</span></div>
+      <div class="frame-viewer">
+        <div class="placeholder" id="episode-frame"><span>TEST</span></div>
+        <nav class="frame-navigation" id="frame-navigation" aria-label="Screenshot navigation" hidden>
+          <button type="button" class="frame-arrow" id="previous-frame" aria-label="Previous screenshot" title="Previous screenshot"><span aria-hidden="true">&#8249;</span></button>
+          <span class="frame-counter" id="frame-counter" aria-live="polite">1 / 3</span>
+          <button type="button" class="frame-arrow" id="next-frame" aria-label="Next screenshot" title="Next screenshot"><span aria-hidden="true">&#8250;</span></button>
+        </nav>
+      </div>
       <form id="guess-form" class="guess-area" aria-label="Episode guessing">
         <div class="search-wrap">
           <input id="episode-input" type="text" placeholder="Guess the episode..." autocomplete="off" aria-label="Guess the episode" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false" role="combobox">
@@ -22,6 +29,7 @@
         <div class="mode-picker">
           <label for="game-mode">Game Mode</label>
           <select id="game-mode" name="game-mode">
+            <option value="easy">Easy Mode</option>
             <option value="normal">Normal Mode</option>
             <option value="hard">Hard Mode</option>
           </select>
