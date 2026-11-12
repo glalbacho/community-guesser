@@ -26,6 +26,18 @@
   const customLivesDisplay = $("custom-lives-display");
   const customSeasonInputs = Array.from(document.querySelectorAll("[data-custom-season]"));
   const customStart = $("custom-start"), customError = $("custom-error");
+  const customSummary = $("custom-summary");
+  const customModifiers = {
+    four:$("custom-four"), numbers:$("custom-numbers"), three:$("custom-three"),
+    reveal:$("custom-reveal"), distort:$("custom-distort"), once:$("custom-once")
+  };
+  const modifierKeys = ["four","numbers","three","reveal","distort","once"];
+  const customFeatureFlags = () => modifierKeys.map(key => customFeatures[key] ? "1" : "0").join("");
+  const customHas = key => challenge === "custom" && customStarted && customFeatures[key];
+  const revealEnabled = () => challenge === "progressive" || customHas("reveal");
+  const fourEnabled = () => challenge === "four" || customHas("four");
+  const threeEnabled = () => (challenge === "classic" && mode === "easy") || customHas("three");
+  const distortedEnabled = () => (challenge === "classic" && mode === "impossible") || customHas("distort");
   const openOptions = $("open-options"), optionsPanel = $("options-panel");
   const optionShowOnFocus = $("option-show-on-focus"), optionAutoFocus = $("option-auto-focus");
   const board = $("leaderboard"), boardStatus = $("leaderboard-status"), boardForm = $("leaderboard-form");
@@ -55,6 +67,7 @@
   modeSelect.value = mode;
   let challenge = "classic", season = 1, score = 0, high = 0;
   let customLives = 3, customSeasons = [1,2,3,4,5,6], customStarted = false;
+  let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false};
   let showOnFocus = true, autoFocusInput = false;
   try {
     const savedOptions = JSON.parse(localStorage.getItem(optionsKey) || "{}");
@@ -66,17 +79,32 @@
       const valid = [...new Set(savedCustom.seasons.map(Number))].filter(n => Number.isInteger(n) && n >= 1 && n <= 6);
       if (valid.length) customSeasons = valid.sort((a,b) => a-b);
     }
+    if (savedCustom.features && typeof savedCustom.features === "object") {
+      modifierKeys.forEach(key => { customFeatures[key] = savedCustom.features[key] === true; });
+    }
   } catch (_) {}
   optionShowOnFocus.checked = showOnFocus;
   optionAutoFocus.checked = autoFocusInput;
   customLivesInput.value = String(customLives);
   customLivesDisplay.textContent = String(customLives);
   customSeasonInputs.forEach(el => { el.checked = customSeasons.includes(Number(el.value)); });
+  modifierKeys.forEach(key => { customModifiers[key].checked = customFeatures[key]; });
+  function updateCustomSummary() {
+    const selectedSeasons = customSeasonInputs.filter(el => el.checked).map(el => Number(el.value));
+    const total = playable.filter(ep => selectedSeasons.includes(seasonNumber(ep))).length;
+    const selectedFeatures = [customModifiers.four.checked ? "Four Choices" : "typed answers"];
+    if (customModifiers.numbers.checked) selectedFeatures.push("numbers only");
+    if (customModifiers.three.checked) selectedFeatures.push("3 images");
+    if (customModifiers.reveal.checked) selectedFeatures.push("Reveal");
+    if (customModifiers.distort.checked) selectedFeatures.push("Impossible");
+    if (customModifiers.once.checked) selectedFeatures.push("no repeats");
+    customSummary.textContent = total + " episodes · " + customLivesInput.value + " lives · " + selectedFeatures.join(" + ");
+  }
   function saveOptions() {
     try { localStorage.setItem(optionsKey, JSON.stringify({showOnFocus, autoFocusInput})); } catch (_) {}
   }
   function saveCustom() {
-    try { localStorage.setItem(customKey, JSON.stringify({lives:customLives, seasons:customSeasons})); } catch (_) {}
+    try { localStorage.setItem(customKey, JSON.stringify({lives:customLives, seasons:customSeasons, features:customFeatures})); } catch (_) {}
   }
   optionShowOnFocus.addEventListener("change", () => {
     showOnFocus = optionShowOnFocus.checked;
@@ -93,8 +121,14 @@
   });
   customLivesInput.addEventListener("input", () => {
     customLivesDisplay.textContent = customLivesInput.value;
+    updateCustomSummary();
   });
-  customSeasonInputs.forEach(el => el.addEventListener("change", () => { customError.hidden = true; }));
+  modifierKeys.forEach(key => customModifiers[key].addEventListener("change", updateCustomSummary));
+  customSeasonInputs.forEach(el => el.addEventListener("change", () => {
+    customError.hidden = true;
+    updateCustomSummary();
+  }));
+  updateCustomSummary();
   customStart.addEventListener("click", () => {
     const seasons = customSeasonInputs.filter(el => el.checked).map(el => Number(el.value));
     if (!seasons.length) {
@@ -103,6 +137,7 @@
     }
     customSeasons = seasons;
     customLives = Math.min(10, Math.max(1, Number(customLivesInput.value) || 3));
+    customFeatures = Object.fromEntries(modifierKeys.map(key => [key, customModifiers[key].checked]));
     saveCustom();
     customStarted = true;
     resetGame();
@@ -118,7 +153,7 @@
   function boardKey() {
     if (challenge === "classic") return "classic:" + mode;
     if (challenge === "season") return "season:" + season;
-    if (challenge === "custom") return "custom:" + customLives + ":" + customSeasons.slice().sort((a,b)=>a-b).join("-");
+    if (challenge === "custom") return "custom:" + customLives + ":" + customSeasons.slice().sort((a,b)=>a-b).join("-") + ":" + customFeatureFlags();
     if (challenge === "daily") return "daily:" + dailyDate();
     if (challenge === "communityle") return "communityle:" + dailyDate();
     return "challenge:" + challenge;
@@ -225,7 +260,7 @@
   function modeHighKey() {
     return "community-guesser-high-score-" +
       (challenge === "classic" ? mode : challenge === "season" ? "season-" + season :
-       challenge === "custom" ? "custom-" + customLives + "-" + customSeasons.join("-") : challenge);
+       challenge === "custom" ? "custom-" + customLives + "-" + customSeasons.join("-") + "-" + customFeatureFlags() : challenge);
   }
   function loadHigh() {
     try {
@@ -363,7 +398,10 @@
   function saveDaily() {
     try { localStorage.setItem(dayKey(), JSON.stringify({ answers: dailyAnswers })); } catch (_) {}
   }
-  function displayLabel(ep) { return challenge === "classic" && (mode === "hard" || mode === "impossible") ? ep.id : label(ep); }
+  function displayLabel(ep) {
+    return ((challenge === "classic" && (mode === "hard" || mode === "impossible")) ||
+      customHas("numbers")) ? ep.id : label(ep);
+  }
 
   function candidateEpisodes() {
     if (challenge === "season") return episodes.filter(ep => seasonNumber(ep) === season);
@@ -502,6 +540,8 @@
       customLivesInput.value = String(customLives);
       customLivesDisplay.textContent = String(customLives);
       customSeasonInputs.forEach(el => { el.checked = customSeasons.includes(Number(el.value)); });
+      modifierKeys.forEach(key => { customModifiers[key].checked = customFeatures[key]; });
+      updateCustomSummary();
       customError.hidden = true;
     }
     challengeSubtitle.hidden = challenge === "classic";
@@ -511,10 +551,10 @@
       challenge !== "one110" && challenge !== "daily" && challenge !== "custom";
     frameViewer.hidden = challenge === "timeline" || (challenge === "custom" && !customStarted);
     timelineBoard.hidden = challenge !== "timeline";
-    textAnswer.hidden = challenge === "four" || challenge === "timeline" ||
+    textAnswer.hidden = fourEnabled() || challenge === "timeline" ||
       (challenge === "custom" && !customStarted);
-    fourChoices.hidden = challenge !== "four";
-    revealControls.hidden = challenge !== "progressive";
+    fourChoices.hidden = !fourEnabled();
+    revealControls.hidden = !revealEnabled();
     highLabel.textContent = challenge === "daily" ? "Best Daily Score" : "High Score";
     communityleBoard.hidden = challenge !== "communityle";
     form.querySelector(".score").hidden = challenge === "communityle" || (challenge === "custom" && !customStarted);
@@ -609,7 +649,7 @@
   }
   function nextId() {
     if (!pending.length) {
-      if (challenge === "one110" && answered > 0) return null;
+      if ((challenge === "one110" || customHas("once")) && answered > 0) return null;
       refillQueue();
     }
     const id = pending.pop();
@@ -619,7 +659,7 @@
   function imageUrlsFor(id) {
     const urls = imagePool[id];
     if (!urls || !urls.length) return [];
-    if (challenge === "classic" && mode === "easy" && urls.length >= 3) {
+    if (threeEnabled() && urls.length >= 3) {
       return [0, 1, 2].map(part => {
         const start = Math.floor(part * urls.length / 3);
         const end = Math.floor((part + 1) * urls.length / 3);
@@ -634,7 +674,7 @@
     img.decoding = "async";
     img.style.cssText = "width:100%;height:100%;object-fit:contain;display:block";
     // Impossible Mode uses only runtime CSS. The uploaded original is untouched.
-    if (challenge === "classic" && mode === "impossible") {
+    if (distortedEnabled()) {
       const hue = Math.round(Math.random() * 340);
       const zoom = (1.14 + Math.random() * .45).toFixed(2);
       const rotation = (Math.random() * 7 - 3.5).toFixed(1);
@@ -651,7 +691,7 @@
       img.style.transform = "translate(" + dx + "%," + dy + "%) scale(" + zoom + ") rotate(" + rotation + "deg)";
     }
     const frame = {img, status:"loading", ready:null,
-      pixelResolution: challenge === "classic" && mode === "impossible"
+      pixelResolution: distortedEnabled()
         ? 28 + Math.floor(Math.random() * 108) : null};
     frame.ready = new Promise(resolve => {
       img.onload = () => { frame.status = "ready"; resolve(); };
@@ -685,12 +725,17 @@
       id = step.id; urls = [step.url];
     } else {
       id = nextId();
-      if (!id) { finishGame("All 110 episodes completed! A perfect run."); return; }
+      if (!id) {
+        finishGame(challenge === "custom"
+          ? "Challenge complete! All selected episodes have been played."
+          : "All 110 episodes completed! A perfect run.");
+        return;
+      }
       urls = imageUrlsFor(id);
     }
     const displayEpoch = epoch;
     currentRound = { id, frames:urls.map(url => createFrame(url, displayEpoch)) };
-    if (challenge === "four") buildChoices();
+    if (fourEnabled()) buildChoices();
     updateProgress();
     displayFrame();
   }
@@ -698,12 +743,14 @@
     let message = "";
     if (challenge === "survival") message = "Lives: " + lives + " / 3 · " + score + " correct";
     if (challenge === "custom") message = "Lives: " + lives + " / " + customLives +
-      " · " + customSeasons.map(n => "S" + n).join(", ") + " · " + score + " correct";
+      " · " + customSeasons.map(n => "S" + n).join(", ") +
+      (customHas("once") ? " · " + answered + " / " + episodePool().length : "") +
+      " · " + score + " points";
     if (challenge === "one110") message = (answered + 1) + " / " + playable.length + " episodes";
     if (challenge === "daily") message = dailyDate() + " (UTC) · " + (answered + 1) + " / 5";
     if (challenge === "season") message = episodePool().length + " episodes in this season";
     progressDetail.textContent = message;
-    if (challenge === "progressive") {
+    if (revealEnabled()) {
       revealLabel.textContent = "Reveal " + revealStage + " / 5 · " + (6-revealStage) + " points";
       revealNext.disabled = revealStage === 5;
     }
@@ -711,7 +758,7 @@
   function displayFrame() {
     if (!currentRound || !currentRound.frames) return;
     const round = currentRound, frame = round.frames[currentFrame];
-    const easy = challenge === "classic" && mode === "easy" && round.frames.length === 3;
+    const easy = threeEnabled() && round.frames.length === 3;
     frameNavigation.hidden = !easy;
     if (easy) {
       frameCounter.textContent = (currentFrame + 1) + " / 3";
@@ -727,7 +774,7 @@
       });
       return;
     }
-    if (challenge === "classic" && mode === "impossible") {
+    if (distortedEnabled() && !revealEnabled()) {
       try {
         const canvas = document.createElement("canvas");
         const resolution = frame.pixelResolution;
@@ -775,7 +822,7 @@
         frame.img.style.filter = "blur(" + blurs[stage] + "px) hue-rotate(" + pixelHue + "deg)";
         imageBox.replaceChildren(frame.img);
       }
-    } else if (challenge === "progressive" && revealStage < 5) {
+    } else if (revealEnabled() && revealStage < 5) {
       // Canvas changes only the browser rendering, never the source WebP file.
       try {
         const canvas = document.createElement("canvas");
@@ -788,22 +835,26 @@
         context.imageSmoothingEnabled = false;
         context.drawImage(frame.img, 0, 0, canvas.width, canvas.height);
         canvas.style.cssText = "width:100%;height:100%;object-fit:contain;image-rendering:pixelated";
+        if (distortedEnabled()) {
+          canvas.style.filter = frame.img.style.filter;
+          canvas.style.transform = frame.img.style.transform;
+        }
         canvas.setAttribute("role", "img");
         canvas.setAttribute("aria-label", "Pixelated Community screenshot");
         imageBox.replaceChildren(canvas);
       } catch (_) {
-        frame.img.style.filter = "blur(" + (27 - 5*revealStage) + "px)";
+        frame.img.style.filter = "blur(" + (27 - 5*revealStage) + "px)" + (distortedEnabled() ? " hue-rotate(90deg)" : "");
         imageBox.replaceChildren(frame.img);
       }
     } else {
       frame.img.style.filter = frame.img.style.filter || "";
-      if (challenge === "progressive") frame.img.style.filter = "";
+      if (revealEnabled() && !distortedEnabled()) frame.img.style.filter = "";
       imageBox.replaceChildren(frame.img);
     }
     updateProgress();
   }
   function moveFrame(direction) {
-    if (challenge !== "classic" || mode !== "easy" || !currentRound || gameOver) return;
+    if (!threeEnabled() || !currentRound || gameOver) return;
     const next = currentFrame + direction;
     if (next < 0 || next >= currentRound.frames.length) return;
     currentFrame = next; displayFrame();
@@ -811,7 +862,7 @@
   previousFrameButton.addEventListener("click", () => moveFrame(-1));
   nextFrameButton.addEventListener("click", () => moveFrame(1));
   revealNext.addEventListener("click", () => {
-    if (challenge !== "progressive" || gameOver || revealStage >= 5) return;
+    if (!revealEnabled() || gameOver || revealStage >= 5) return;
     revealStage++;
     displayFrame();
   });
@@ -819,20 +870,20 @@
     if (event.altKey || event.ctrlKey || event.metaKey || menu.classList.contains("open")) return;
     if (event.target.closest("input, textarea, select, [contenteditable=true]")) return;
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      if (challenge === "classic" && mode === "easy") {
+      if (threeEnabled()) {
         event.preventDefault(); moveFrame(event.key === "ArrowRight" ? 1 : -1);
       }
     }
   });
   function buildChoices() {
     const right = currentRound.id;
-    const distractors = randomShuffle(playable.filter(ep => ep.id !== right).map(ep => ep.id)).slice(0, 3);
+    const distractors = randomShuffle(episodePool().filter(ep => ep.id !== right).map(ep => ep.id)).slice(0, 3);
     choices = randomShuffle([right, ...distractors]);
     fourChoices.replaceChildren();
     choices.forEach(id => {
       const b = document.createElement("button");
       b.type = "button";
-      b.textContent = label(byId[id]);
+      b.textContent = displayLabel(byId[id]);
       b.addEventListener("click", () => answer(id));
       fourChoices.appendChild(b);
     });
@@ -885,7 +936,7 @@
     if (challenge === "one110" && answered >= playable.length) restart.textContent = "Play again";
     feedback.textContent = message;
     closeSuggestions();
-    if (challenge !== "four" && challenge !== "timeline") button.disabled = false;
+    if (!fourEnabled() && challenge !== "timeline") button.disabled = false;
     if (challenge !== "daily" && challenge !== "communityle") checkBoard(finalScore);
   }
   function finishDaily() {
@@ -944,11 +995,15 @@
       return;
     }
     if (correct) {
-      score += challenge === "progressive" ? (6 - revealStage) : 1;
+      score += revealEnabled() ? (6 - revealStage) : 1;
       scoreEl.textContent = String(score);
       setHigh();
       if (challenge === "one110" && answered >= playable.length) {
         finishGame("Perfect! You recognized all " + playable.length + " episodes.");
+        return;
+      }
+      if (customHas("once") && answered >= episodePool().length) {
+        finishGame("Challenge complete! All " + episodePool().length + " selected episodes played.");
         return;
       }
       advance();
@@ -985,7 +1040,7 @@
   form.addEventListener("submit", event => {
     event.preventDefault();
     if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(); return; }
-    if (challenge === "four" || challenge === "timeline" || gameOver) return;
+    if (fourEnabled() || challenge === "timeline" || gameOver) return;
     resolveInput();
   });
   restart.addEventListener("click", () => { if (challenge !== "daily") resetGame(); });
