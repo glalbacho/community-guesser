@@ -11,13 +11,20 @@
   const scoreEl = document.getElementById("score");
   const highEl = document.getElementById("high-score");
   const modeSelect = document.getElementById("game-mode");
-  const imageBox = document.querySelector(".placeholder");
+  const imageBox = document.getElementById("episode-frame");
+  const frameNavigation = document.getElementById("frame-navigation");
+  const previousFrameButton = document.getElementById("previous-frame");
+  const nextFrameButton = document.getElementById("next-frame");
+  const frameCounter = document.getElementById("frame-counter");
   const highScoreKey = "community-guesser-high-score";
   const modeKey = "community-guesser-mode";
 
   const label = ep => ep.id + " " + ep.title;
   let mode = "normal";
-  try { if (localStorage.getItem(modeKey) === "hard") mode = "hard"; } catch (_) {}
+  try {
+    const savedMode = localStorage.getItem(modeKey);
+    if (savedMode === "easy" || savedMode === "hard") mode = savedMode;
+  } catch (_) {}
   modeSelect.value = mode;
   const displayLabel = ep => mode === "hard" ? ep.id : label(ep);
   const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -149,11 +156,15 @@
   }
 
   modeSelect.addEventListener("change", () => {
-    mode = modeSelect.value === "hard" ? "hard" : "normal";
+    const wasEasy = mode === "easy";
+    mode = modeSelect.value === "easy" ? "easy" :
+      modeSelect.value === "hard" ? "hard" : "normal";
     try { localStorage.setItem(modeKey, mode); } catch (_) {}
     if (selected) input.value = displayLabel(selected);
     if (gameOver && currentEpisode) feedback.textContent = gameOverMessage();
     if (!gameOver && !suggestions.hidden) renderSuggestions();
+    // Recreate the screenshots only when switching between one and three images.
+    if (wasEasy !== (mode === "easy")) rebuildCurrentRound();
   });
 
   input.addEventListener("focus", renderSuggestions);
@@ -201,42 +212,104 @@
     return playable.find(ep => ep.id === id);
   }
 
-  // Keep TWO complete future rounds preloaded. The episode is chosen first,
-  // then one uniformly random screenshot from that episode.
+  // Keep two future episodes preloaded so each transition is immediate.
   const preparedRounds = [];
   let shownRound = null;
+  let activeFrameIndex = 0;
 
-  function prepareRound() {
-    const episode = nextEpisode();
+  function pickFrameUrls(urls) {
+    if (mode !== "easy" || urls.length < 3) {
+      return [urls[Math.floor(Math.random() * urls.length)]];
+    }
+    // Screenshot names follow episode chronology. Draw one distinct frame
+    // from each third of the available footage (beginning, middle, end).
+    return [0, 1, 2].map(part => {
+      const start = Math.floor(part * urls.length / 3);
+      const end = Math.floor((part + 1) * urls.length / 3);
+      return urls[start + Math.floor(Math.random() * (end - start))];
+    });
+  }
+
+  function prepareRound(episode = nextEpisode()) {
     if (!episode) return null;
     const urls = Array.isArray(imagePool[episode.id])
       ? imagePool[episode.id].filter(url => typeof url === "string" && url.length > 0)
       : [];
-    const url = urls.length ? urls[Math.floor(Math.random() * urls.length)] : null;
-    const round = { episode, image: null, status: "loading", ready: null };
-    if (!url) {
-      round.status = "error";
-      round.ready = Promise.resolve();
-      return round;
-    }
-    const img = new Image();
-    img.alt = "Guess the Community episode";
-    img.decoding = "async";
-    img.style.cssText = "width:100%;height:100%;object-fit:contain;display:block";
-    round.image = img;
-    round.ready = new Promise(resolve => {
-      img.onload = async () => {
-        try { if (img.decode) await img.decode(); } catch (_) {}
-        round.status = "ready";
-        resolve();
-      };
-      img.onerror = () => {
-        round.status = "error";
-        resolve();
-      };
-      img.src = url;
+    if (!urls.length) return null;
+
+    const frames = pickFrameUrls(urls).map(url => {
+      const img = new Image();
+      img.alt = "Screenshot from a Community episode";
+      img.decoding = "async";
+      img.style.cssText = "width:100%;height:100%;object-fit:contain;display:block";
+      const frame = { image: img, status: "loading", ready: null };
+      frame.ready = new Promise(resolve => {
+        img.onload = async () => {
+          try { if (img.decode) await img.decode(); } catch (_) {}
+          frame.status = "ready";
+          resolve();
+        };
+        img.onerror = () => {
+          frame.status = "error";
+          resolve();
+        };
+        img.src = url;
+      });
+      return frame;
     });
-    return round;
+    return { episode, frames };
+  }
+
+  function updateFrameNavigation() {
+    const show = mode === "easy" && shownRound && shownRound.frames.length === 3;
+    frameNavigation.hidden = !show;
+    if (!show) return;
+    frameCounter.textContent = (activeFrameIndex + 1) + " / 3";
+    previousFrameButton.disabled = activeFrameIndex === 0;
+    nextFrameButton.disabled = activeFrameIndex === 2;
+  }
+
+  function displayActiveFrame() {
+    const round = shownRound;
+    if (!round) return;
+    const frame = round.frames[activeFrameIndex];
+    updateFrameNavigation();
+    if (!frame) {
+      imageBox.textContent = "ERROR: IMAGE NOT AVAILABLE";
+      return;
+    }
+    if (frame.status === "ready") {
+      imageBox.replaceChildren(frame.image);
+    } else if (frame.status === "error") {
+      imageBox.textContent = "ERROR: IMAGE NOT AVAILABLE";
+    } else {
+      imageBox.textContent = "LOADING...";
+      frame.ready.then(() => {
+        if (shownRound === round && round.frames[activeFrameIndex] === frame) {
+          displayActiveFrame();
+        }
+      });
+    }
+  }
+
+  function showRound(round) {
+    shownRound = round;
+    currentEpisode = round ? round.episode : null;
+    activeFrameIndex = 0;
+    if (!round) {
+      frameNavigation.hidden = true;
+      imageBox.textContent = "ERROR: NO EPISODES";
+      return;
+    }
+    displayActiveFrame();
+  }
+
+  function preloadFutureRounds() {
+    while (preparedRounds.length < 2) {
+      const future = prepareRound();
+      if (!future) break;
+      preparedRounds.push(future);
+    }
   }
 
   function nextRound() {
@@ -244,33 +317,40 @@
       const first = prepareRound();
       if (first) preparedRounds.push(first);
     }
-    const round = preparedRounds.shift();
-    // Prepare the next two rounds before the player answers.
-    while (preparedRounds.length < 2) {
-      const future = prepareRound();
-      if (!future) break;
-      preparedRounds.push(future);
-    }
-    if (!round) {
-      currentEpisode = null;
-      imageBox.textContent = "ERROR: NO EPISODES";
-      return;
-    }
-    currentEpisode = round.episode;
-    shownRound = round;
-    function render() {
-      if (shownRound !== round) return;
-      if (round.status === "ready") {
-        imageBox.replaceChildren(round.image);
-      } else if (round.status === "error") {
-        imageBox.textContent = "ERROR: IMAGE NOT AVAILABLE";
-      } else {
-        imageBox.textContent = "LOADING...";
-      }
-    }
-    render();
-    round.ready.then(render);
+    const round = preparedRounds.shift() || null;
+    preloadFutureRounds();
+    showRound(round);
   }
+
+  function rebuildCurrentRound() {
+    if (!shownRound) return;
+    // Preserve the current answer and queued episode order when changing modes.
+    const episode = shownRound.episode;
+    const queuedEpisodes = preparedRounds.map(round => round.episode);
+    preparedRounds.length = 0;
+    queuedEpisodes.forEach(queued => preparedRounds.push(prepareRound(queued)));
+    showRound(prepareRound(episode));
+    preloadFutureRounds();
+  }
+
+  function moveFrame(direction) {
+    if (mode !== "easy" || !shownRound || shownRound.frames.length !== 3) return;
+    const next = activeFrameIndex + direction;
+    if (next < 0 || next >= shownRound.frames.length) return;
+    activeFrameIndex = next;
+    displayActiveFrame();
+  }
+
+  previousFrameButton.addEventListener("click", () => moveFrame(-1));
+  nextFrameButton.addEventListener("click", () => moveFrame(1));
+  document.addEventListener("keydown", event => {
+    if (mode !== "easy" || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.target.closest("input, textarea, select, [contenteditable=true]")) return;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      moveFrame(event.key === "ArrowRight" ? 1 : -1);
+    }
+  });
 
   function playAgain() {
     gameOver = false;
