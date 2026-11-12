@@ -809,6 +809,8 @@
     form.querySelector(".score").hidden = challenge === "communityle" || (challenge === "custom" && !customStarted);
 
     restart.hidden = true;
+    textAnswer.classList.remove("replay-only");
+    feedback.classList.remove("is-wrong","is-correct");
     seasonSelect.value = String(season);
   }
   function menuPickerMark() {
@@ -840,7 +842,10 @@
     awaitingNext = false; selected = null; highlighted = -1; visible = [];
     currentFrame = 0; revealStage = 1; timelineSelection = -1;
     input.value = ""; input.disabled = false; button.disabled = false;
-    button.textContent = "Guess"; button.hidden = false; feedback.textContent = "";
+    button.textContent = "Guess"; button.hidden = false;
+    textAnswer.classList.remove("replay-only");
+    feedback.classList.remove("is-wrong","is-correct");
+    feedback.textContent = "";
     closeSuggestions();
     scoreEl.textContent = "0";
     high = loadHigh(); highEl.textContent = String(high);
@@ -1380,14 +1385,16 @@
     }
     if(version!==timelineRevealVersion||challenge!=="timeline")return;
     timelineBoard.classList.add(correct?"solved":"incorrect");
-    if(correct) {
-      timelineSubmit.hidden=false;
-      timelineSubmit.disabled=false;
-      timelineSubmit.textContent="Next timeline →";
-    }
+    timelineSubmit.hidden=false;
+    timelineSubmit.disabled=false;
+    timelineSubmit.textContent=correct?"Next timeline →":"Play again";
   }
   timelineSubmit.addEventListener("click",()=>{
-    if(gameOver||challenge!=="timeline")return;
+    if(challenge!=="timeline")return;
+    if(gameOver){
+      if(!timelineSubmit.disabled)resetGame();
+      return;
+    }
     if(timelineRevealed){
       if(timelineSubmit.disabled)return;
       timelineSubmit.textContent="Check order";
@@ -1404,10 +1411,22 @@
     input.disabled = true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     timelineSubmit.disabled = true;
-    button.hidden = true;
-    restart.hidden = false;
-    restart.textContent = "Play again";
-    if (challenge === "one110" && answered >= playable.length) restart.textContent = "Play again";
+    // Keep the replay action in the same place as the original large Guess
+    // button. Four Choices uses that same space after the choices close;
+    // Timeline uses its existing Check order button after the reveal.
+    restart.hidden = true;
+    if (challenge !== "timeline") {
+      if (fourEnabled()) {
+        fourChoices.hidden = true;
+        textAnswer.hidden = false;
+        textAnswer.classList.add("replay-only");
+      }
+      button.hidden = false;
+      button.disabled = false;
+      button.textContent = "Play again";
+    }
+    feedback.classList.toggle("is-wrong", message.startsWith("Game over"));
+    feedback.classList.toggle("is-correct", !message.startsWith("Game over"));
     feedback.textContent = message;
     closeSuggestions();
     if (!fourEnabled() && challenge !== "timeline") button.disabled = false;
@@ -1533,6 +1552,7 @@
     if (fourEnabled() || challenge === "timeline" || gameOver) return;
     resolveInput();
   });
+  // Legacy standalone replay control is kept hidden for compatibility.
   restart.addEventListener("click", () => { if (challenge !== "daily") resetGame(); });
   input.addEventListener("focus", () => {
     if (showOnFocus || input.value.trim()) renderSuggestions();
