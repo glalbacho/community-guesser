@@ -16,7 +16,8 @@
   const previousFrameButton = document.getElementById("previous-frame");
   const nextFrameButton = document.getElementById("next-frame");
   const frameCounter = document.getElementById("frame-counter");
-  const highScoreKey = "community-guesser-high-score";
+  const highScoreKey = mode => "community-guesser-high-score-" + mode;
+  const legacyHighScoreKey = "community-guesser-high-score";
   const modeKey = "community-guesser-mode";
 
   const label = ep => ep.id + " " + ep.title;
@@ -31,9 +32,22 @@
   const episodeNumber = ep => Number(ep.id.slice(4));
   const seasonNumber = ep => Number(ep.id.slice(1, 3));
 
+  function loadHighScore(mode) {
+    try {
+      let saved = localStorage.getItem(highScoreKey(mode));
+      // Preserve the former shared record as the Normal Mode high score.
+      if (saved === null && mode === "normal") {
+        saved = localStorage.getItem(legacyHighScoreKey);
+      }
+      const value = Number(saved);
+      return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   let score = 0;
-  let high = 0;
-  try { high = Number(localStorage.getItem(highScoreKey)) || 0; } catch (_) {}
+  let high = loadHighScore(mode);
   highEl.textContent = String(high);
   let selected = null;
   let highlighted = -1;
@@ -156,15 +170,17 @@
   }
 
   modeSelect.addEventListener("change", () => {
-    const wasEasy = mode === "easy";
-    mode = modeSelect.value === "easy" ? "easy" :
+    const nextMode = modeSelect.value === "easy" ? "easy" :
       modeSelect.value === "hard" ? "hard" : "normal";
+    if (nextMode === mode) return;
+    mode = nextMode;
     try { localStorage.setItem(modeKey, mode); } catch (_) {}
-    if (selected) input.value = displayLabel(selected);
-    if (gameOver && currentEpisode) feedback.textContent = gameOverMessage();
-    if (!gameOver && !suggestions.hidden) renderSuggestions();
-    // Recreate the screenshots only when switching between one and three images.
-    if (wasEasy !== (mode === "easy")) rebuildCurrentRound();
+    high = loadHighScore(mode);
+    highEl.textContent = String(high);
+    // Changing difficulty ends the current streak and starts a fresh round.
+    // Clear old preloads so the new round uses the selected mode's image count.
+    preparedRounds.length = 0;
+    playAgain();
   });
 
   input.addEventListener("focus", renderSuggestions);
@@ -322,17 +338,6 @@
     showRound(round);
   }
 
-  function rebuildCurrentRound() {
-    if (!shownRound) return;
-    // Preserve the current answer and queued episode order when changing modes.
-    const episode = shownRound.episode;
-    const queuedEpisodes = preparedRounds.map(round => round.episode);
-    preparedRounds.length = 0;
-    queuedEpisodes.forEach(queued => preparedRounds.push(prepareRound(queued)));
-    showRound(prepareRound(episode));
-    preloadFutureRounds();
-  }
-
   function moveFrame(direction) {
     if (mode !== "easy" || !shownRound || shownRound.frames.length !== 3) return;
     const next = activeFrameIndex + direction;
@@ -354,6 +359,7 @@
 
   function playAgain() {
     gameOver = false;
+    lastStreak = 0;
     score = 0;
     scoreEl.textContent = "0";
     input.value = "";
@@ -383,7 +389,7 @@
       score += 1;
       if (score > high) {
         high = score;
-        try { localStorage.setItem(highScoreKey, String(high)); } catch (_) {}
+        try { localStorage.setItem(highScoreKey(mode), String(high)); } catch (_) {}
       }
       scoreEl.textContent = String(score);
       highEl.textContent = String(high);
