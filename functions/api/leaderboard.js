@@ -5,7 +5,7 @@ import { load, setup as setupGame, json } from "../../src/server/engine.js";
 const allowedMode=mode=>typeof mode==="string"&&(
   /^classic:(easy|normal|hard|impossible)$/.test(mode)||
   /^season:[1-6]$/.test(mode)||
-  /^challenge:(four|timeline|progressive|one110)$/.test(mode)||
+  /^challenge:(four|timeline|progressive)$/.test(mode)||
   /^custom:(10|[1-9]):[1-6](?:-[1-6]){0,5}:[01]{6}$/.test(mode)
 );
 async function setup(db){
@@ -59,8 +59,7 @@ export async function onRequest({request,env}){
       return json({error:"A completed, server-verified game is required."},403);
     if(session.submitted)return json({error:"This result has already been submitted."},409);
     const score=session.state.score;
-    if(!Number.isInteger(score)||score<1||score>100000||
-      input.mode==="challenge:one110"&&score>110)
+    if(!Number.isInteger(score)||score<1||score>100000)
       return json({error:"At least 1 verified point is required."},400);
     const before=await getBoard(env.DB,input.mode);
     if(before.length===3&&score<=before[2].score)
