@@ -67,6 +67,12 @@
   const board = $("leaderboard"), boardStatus = $("leaderboard-status"), boardForm = $("leaderboard-form");
   const boardName = $("leaderboard-name"), boardSubmit = $("leaderboard-submit"), boardList = $("leaderboard-list");
   let boardRequest = 0, boardMode = "", boardScore = 0;
+  const boardModal=$("leaderboard-modal"),boardModalBackdrop=$("leaderboard-modal-backdrop");
+  const boardModalClose=$("leaderboard-modal-close"),boardModalLater=$("leaderboard-modal-later");
+  const boardModalScore=$("leaderboard-modal-score"),boardModalError=$("leaderboard-modal-error");
+  const boardReopen=$("leaderboard-reopen"),retryGame=$("retry-game");
+  let boardAlreadySubmitted=false,boardModalPreviousFocus=null,pendingAutoClaim=false;
+  let failedOperation=null,lastGuess=null;
   const optionsKey = "community-guesser-options-v1";
   const customKey = "community-guesser-custom-v1";
   const modeKey = "community-guesser-mode";
@@ -218,10 +224,52 @@
   function scoreDescription(points) {
     return challenge === "communityle" ? (points === 0 ? "Unsolved" : (7 - points) + " guesses") : points + " points";
   }
+  const claimPromptKey=()=>sessionId?"community-guesser-top3-offered-v1:"+sessionId:null;
+  function closeBoardModal(){
+    if(boardModal.hidden)return;
+    boardModal.hidden=true;
+    const previous=boardModalPreviousFocus;
+    boardModalPreviousFocus=null;
+    if(previous&&previous.isConnected&&!previous.disabled&&!previous.hidden)previous.focus();
+  }
+  function openBoardModal(){
+    if(boardAlreadySubmitted||!boardMode||boardScore<1)return;
+    boardModalPreviousFocus=document.activeElement;
+    boardModalScore.textContent=scoreDescription(boardScore);
+    boardModalError.textContent="";
+    boardForm.hidden=false;
+    boardModal.hidden=false;
+    boardName.focus();
+  }
+  boardReopen.addEventListener("click",openBoardModal);
+  boardModalClose.addEventListener("click",closeBoardModal);
+  boardModalLater.addEventListener("click",closeBoardModal);
+  boardModalBackdrop.addEventListener("click",closeBoardModal);
+  document.addEventListener("keydown",event=>{
+    if(boardModal.hidden)return;
+    if(event.key==="Escape"){event.preventDefault();closeBoardModal();return;}
+    if(event.key!=="Tab")return;
+    const items=[boardModalClose,boardName,boardSubmit,boardModalLater].filter(el=>!el.disabled);
+    const i=items.indexOf(document.activeElement);
+    if(event.shiftKey&&i<=0){event.preventDefault();items.at(-1).focus();}
+    else if(!event.shiftKey&&i===items.length-1){event.preventDefault();items[0].focus();}
+  });
+  function offerBoardModal(){
+    const key=claimPromptKey();
+    let offered=false;
+    if(key)try{offered=localStorage.getItem(key)==="yes";}catch(_){}
+    if(offered)return;
+    if(key)try{localStorage.setItem(key,"yes");}catch(_){}
+    if(challenge==="communityle"&&!communityleResultModal.hidden)pendingAutoClaim=true;
+    else openBoardModal();
+  }
   function clearBoard() {
     ++boardRequest;
     board.hidden = true;
+    closeBoardModal();
     boardForm.hidden = true;
+    boardReopen.hidden = true;
+    pendingAutoClaim = false;
     boardList.hidden = true;
     boardList.replaceChildren();
     boardStatus.textContent = "";
@@ -257,19 +305,27 @@
     board.hidden = false;
     boardStatus.textContent = "Checking the website Top 3…";
     try {
-      const response = await fetch("/api/leaderboard?mode=" + encodeURIComponent(boardMode),{cache:"no-store"});
+      const response = await fetch("/api/leaderboard?mode=" + encodeURIComponent(boardMode) + "&session=" + encodeURIComponent(sessionId||""),{cache:"no-store"});
       if (!response.ok) throw new Error("Unavailable");
       const result = await response.json();
       if (requestVersion !== boardRequest) return;
       if (!Array.isArray(result.entries)) throw new Error("Invalid response");
-      const entries = result.entries;
-      const qualifies = entries.length < 3 || finalScore > entries[2].score;
-      if (qualifies) {
-        boardStatus.textContent = "You made the website Top 3! Choose a nickname.";
-        boardForm.hidden = false;
-      } else {
-        boardStatus.textContent = "Your score did not reach the website Top 3.";
-        displayBoard(entries);
+      const entries=result.entries;
+      displayBoard(entries);
+      if(boardAlreadySubmitted || result.submitted){
+        boardAlreadySubmitted=true;
+        boardStatus.textContent="Your result has already been submitted.";
+        return;
+      }
+      const qualifies=finalScore>=1&&(entries.length<3||finalScore>entries[2].score);
+      if(qualifies){
+        boardStatus.textContent="You made the website Top 3!";
+        boardReopen.hidden=false;
+        offerBoardModal();
+      }else{
+        boardStatus.textContent=finalScore<1
+          ?"Score at least 1 point to enter the website Top 3."
+          :"Your score did not reach the website Top 3.";
       }
     } catch (_) {
       if (requestVersion !== boardRequest) return;
@@ -281,12 +337,12 @@
     if (boardForm.hidden || !boardMode) return;
     const name = boardName.value.trim();
     if (!/^[\p{L}\p{N} _.-]{1,20}$/u.test(name)) {
-      boardStatus.textContent = "Use 1–20 letters, numbers, spaces, dots, underscores or hyphens.";
+      boardModalError.textContent = "Use 1–20 letters, numbers, spaces, dots, underscores or hyphens.";
       return;
     }
     const requestVersion = boardRequest;
     boardSubmit.disabled = true;
-    boardStatus.textContent = "Saving your result…";
+    boardModalError.textContent = "Saving your result…";
     try {
       const response = await fetch("/api/leaderboard", {
         method:"POST", headers:{"Content-Type":"application/json"},
@@ -295,17 +351,20 @@
       const result = await response.json();
       if (requestVersion !== boardRequest) return;
       if (!response.ok || !result.accepted || !Array.isArray(result.entries)) {
-        boardStatus.textContent = result.error || "This score is no longer in the Top 3.";
+        boardModalError.textContent = result.error || "This score is no longer in the Top 3.";
         boardSubmit.disabled = false;
         return;
       }
+      boardAlreadySubmitted=true;
+      boardReopen.hidden=true;
+      closeBoardModal();
       boardForm.hidden = true;
       boardStatus.textContent = "You're in the website Top 3!";
       displayBoard(result.entries);
     } catch (_) {
       if (requestVersion !== boardRequest) return;
       boardSubmit.disabled = false;
-      boardStatus.textContent = "Could not submit your score. Please retry.";
+      boardModalError.textContent = "Could not submit your score. Please retry.";
     }
   });
 
