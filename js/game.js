@@ -977,7 +977,7 @@
         timelineImages:Object.fromEntries(images.map(item=>[item.token,item.url])),
         timelineSolution:data.timelineSolution||null,
         timelineAnswerLabels:Object.fromEntries((data.timelineSolution||[]).map(item=>[item.token,item.episode]))};
-      timelineOrder=randomShuffle(tokens.slice());
+      timelineOrder=tokens.slice();
       renderTimeline();
     }else{
       currentRound={id:data.revealedEpisode||null,
