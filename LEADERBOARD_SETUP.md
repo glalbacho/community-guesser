@@ -16,6 +16,13 @@ The protected screenshot game and verified Top 3 high scores require **Cloudflar
 
 If you are using a custom URL such as \`/community-guesser/\`, verify that the **page and the \`/api/*\` endpoints are served by the same Cloudflare Pages deployment/origin**. A GitHub Pages site with only Cloudflare DNS is not enough.
 
+## Leaderboard rules
+
+- No minimum score: even a finished game with 0 points can qualify if a place is available.
+- Store only the three highest verified results per mode; the third place must be strictly beaten once three entries exist. Equal scores preserve the earlier entry.
+- A qualifying player chooses a nickname of 1–20 characters (letters, digits, spaces, period, underscore, hyphen). No account is needed.
+- Unsolved Community-le rounds show as `Unsolved`, rather than an invented number of guesses.
+
 ## Architecture
 
 - The browser receives a randomly generated image token and never receives the solution to an unanswered round.
