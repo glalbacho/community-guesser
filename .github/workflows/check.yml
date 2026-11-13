@@ -1,0 +1,17 @@
+name: Community Guesser checks
+on:
+  push:
+    branches: [main, secure-sessions-and-leaderboard]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm test
+      - run: node --check js/game.js
+      - run: npm run build
+      - run: test ! -e dist/src/server/frames.js && test ! -e dist/src/server/engine.js && test ! -e dist/functions && test -e dist/index.html && test -e dist/_routes.json

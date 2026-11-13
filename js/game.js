@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const episodes = window.COMMUNITY_EPISODES || [];
-  const imagePool = window.COMMUNITY_IMAGES || {};
+  // Screenshot-to-episode mapping is intentionally never shipped to the browser.
   const byId = Object.fromEntries(episodes.map(ep => [ep.id, ep]));
   const $ = id => document.getElementById(id);
   const input = $("episode-input"), suggestions = $("suggestions");
@@ -82,7 +82,7 @@
   const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const episodeNumber = ep => Number(ep.id.slice(4));
   const seasonNumber = ep => Number(ep.id.slice(1, 3));
-  const playable = episodes.filter(ep => Array.isArray(imagePool[ep.id]) && imagePool[ep.id].length);
+  const playable = episodes;
   let mode = "normal";
   try {
     const savedMode = localStorage.getItem(modeKey);
@@ -181,6 +181,30 @@
   let epoch = 0;
   let timelineDragging = null, timelineRevealed = false, timelineRevealVersion = 0;
   let timelineMotionAnimations = [];
+  let sessionId = null, remoteBusy = false, hasBooted = false;
+  let communityleHints = {}, communityleCompleted = false;
+  const sessionStoreKey = () => "community-guesser-session-v2:" + boardKey();
+  function gameSettings() {
+    return {challenge,mode,season,lives:customLives,
+      seasons:customSeasons.slice(),features:{...customFeatures}};
+  }
+  async function requestGame(action, details={}) {
+    const response=await fetch("/api/game",{
+      method:"POST",headers:{"content-type":"application/json"},
+      cache:"no-store",body:JSON.stringify({action,session:sessionId,...details})
+    });
+    let value;
+    try { value=await response.json(); }
+    catch(_) { throw new Error("Secure game API not available. This site must be deployed on Cloudflare Pages with Functions enabled."); }
+    if(!response.ok)throw new Error(value.error||"The game server is unavailable.");
+    return value;
+  }
+  function showServerFailure(error) {
+    feedback.textContent = error?.message || "The game server is unavailable.";
+    feedback.classList.add("is-wrong");
+    input.disabled=true;button.disabled=true;
+    timelineSubmit.disabled=true;fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
+  }
 
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
@@ -271,7 +295,7 @@
     try {
       const response = await fetch("/api/leaderboard", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({mode:boardMode,name,score:boardScore})
+        body:JSON.stringify({mode:boardMode,name,session:sessionId})
       });
       const result = await response.json();
       if (requestVersion !== boardRequest) return;
@@ -335,21 +359,6 @@
   }
   function dayKey() { return "community-guesser-daily-" + dailyDate(); }
   function communityleKey() { return "community-guesser-communityle-" + dailyDate(); }
-  function stableHash(text) {
-    let h = 2166136261;
-    for (let i = 0; i < text.length; i++) {
-      h ^= text.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  }
-  function seededRandom(seed) {
-    let x = seed || 1;
-    return () => {
-      x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
-      return (x >>> 0) / 4294967296;
-    };
-  }
   function randomShuffle(arr, random = Math.random) {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(random() * (i + 1));
@@ -357,67 +366,14 @@
     }
     return arr;
   }
-  function dailySchedule() {
-    const rng = seededRandom(stableHash("community-guesser:" + dailyDate()));
-    const picked = randomShuffle(playable.map(ep => ep.id), rng).slice(0, 5);
-    return picked.map(id => {
-      const urls = imagePool[id];
-      return { id, url: urls[Math.floor(rng() * urls.length)] };
-    });
-  }
-  // A seeded daily choice means everyone gets the same screenshot from
-  // 06:00 Berlin time until 06:00 Berlin time on the following day.
-  function communityleSchedule() {
-    const rng = seededRandom(stableHash("community-le-v1:" + dailyDate()));
-    const eligible = playable.slice().sort((a,b) => a.id.localeCompare(b.id));
-    if (!eligible.length) return null;
-    const ep = eligible[Math.floor(rng() * eligible.length)];
-    const urls = imagePool[ep.id];
-    return { id:ep.id, url:urls[Math.floor(rng() * urls.length)] };
-  }
-  function readCommunityle(solution) {
-    try {
-      const saved = JSON.parse(localStorage.getItem(communityleKey()) || "{}");
-      if (saved.solution !== solution.id || saved.url !== solution.url || !Array.isArray(saved.guesses)) return [];
-      const valid = [...new Set(saved.guesses.slice(0,6))];
-      return valid.filter(id => typeof id === "string" && byId[id]);
-    } catch (_) { return []; }
-  }
-  function saveCommunityle() {
-    if (!communityleSolution) return;
-    try {
-      localStorage.setItem(communityleKey(), JSON.stringify({
-        solution:communityleSolution.id, url:communityleSolution.url, guesses:communityleHistory
-      }));
-    } catch (_) {}
-  }
   function communityleDone() {
-    return !!communityleSolution && (
-      communityleHistory.includes(communityleSolution.id) || communityleHistory.length >= 6);
+    return communityleCompleted;
   }
   // Wordle's two-pass matching: exact locations first, then only the
   // remaining unmatched numbers may count as a misplaced match.
   // Index 0 = season; index 1 = episode number.
   function communityleHint(id) {
-    if(!byId[id] || !communityleSolution || !byId[communityleSolution.id])
-      return ["absent","absent"];
-    const guess=[seasonNumber(byId[id]),episodeNumber(byId[id])];
-    const target=[seasonNumber(byId[communityleSolution.id]),
-      episodeNumber(byId[communityleSolution.id])];
-    const result=["absent","absent"];
-    const available=target.slice();
-    for(let i=0;i<2;i++){
-      if(guess[i]===target[i]){
-        result[i]="correct";
-        available[i]=null;
-      }
-    }
-    for(let i=0;i<2;i++){
-      if(result[i]==="correct")continue;
-      const j=available.indexOf(guess[i]);
-      if(j!==-1){result[i]="present";available[j]=null;}
-    }
-    return result;
+    return communityleHints[id] || ["absent","absent"];
   }
   const communityleEmoji = state => state==="correct"?"🟩":
     state==="present"?"🟨":"⬛";
@@ -586,24 +542,6 @@
     openCommunityleResult();
     checkBoard(won ? 7 - communityleHistory.length : 0);
   }
-  function readDaily() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(dayKey()) || "{}");
-      return Array.isArray(saved.answers) ? saved.answers.slice(0, 5).map(v => v === true) : [];
-    } catch (_) { return []; }
-  }
-  function readDailyGuesses() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(dayKey()) || "{}");
-      if (!Array.isArray(saved.guesses)) return [];
-      return saved.guesses.slice(0, 5).map(id => typeof id === "string" && byId[id] ? id : null);
-    } catch (_) { return []; }
-  }
-  function saveDaily() {
-    try {
-      localStorage.setItem(dayKey(), JSON.stringify({ answers:dailyAnswers, guesses:dailyGuesses }));
-    } catch (_) {}
-  }
   function displayLabel(ep) {
     return ((challenge === "classic" && (mode === "hard" || mode === "impossible")) ||
       customHas("numbers")) ? ep.id : label(ep);
@@ -754,7 +692,7 @@
     if (kind) card.classList.add(kind);
     const img = document.createElement("img");
     img.className = "answer-reveal-image";
-    img.src = imageUrl || (imagePool[id] && imagePool[id][0]) || "";
+    img.src = imageUrl || "";
     img.alt = "Original screenshot from " + label(byId[id]);
     img.loading = "lazy";
     const meta = document.createElement("div");
@@ -1016,6 +954,78 @@
       b.setAttribute("aria-current", active ? "page" : "false");
     });
   }
+  function applyServerRound(data) {
+    sessionId=data.session;
+    try { localStorage.setItem(sessionStoreKey(),sessionId); }catch(_){}
+    score=data.score;answered=data.answered;lives=data.lives;
+    scoreEl.textContent=String(score);setHigh();
+    revealStage=data.stage||1;
+    communityleHints=Object.fromEntries((data.guesses||[]).map(g=>[g.id,g.hints]));
+    communityleHistory=(data.guesses||[]).map(g=>g.id);
+    communityleCompleted=challenge==="communityle"&&data.finished;
+    dailyAnswers=(data.history||[]).map(h=>h.correct);
+    dailyGuesses=(data.history||[]).map(h=>h.guess);
+    dailyPlan=(data.history||[]).map(h=>({id:h.id,url:h.url}));
+    awaitingNext=false;gameOver=false;showUnmodifiedAnswer=false;
+    if(!data.round) {
+      currentRound=null;
+      if(data.finished)finishGame("Challenge complete! Final score: "+score+".");
+      return;
+    }
+    if(challenge==="timeline"){
+      const images=data.round.timeline||[];
+      const tokens=images.map(item=>item.token);
+      currentRound={id:null,timeline:tokens,
+        timelineImages:Object.fromEntries(images.map(item=>[item.token,item.url])),
+        timelineSolution:data.timelineSolution||null,
+        timelineAnswerLabels:Object.fromEntries((data.timelineSolution||[]).map(item=>[item.token,item.episode]))};
+      timelineOrder=tokens.slice();
+      renderTimeline();
+    }else{
+      currentRound={id:data.revealedEpisode||null,
+        frames:data.round.images.map(url=>createFrame(url)),
+        choices:data.round.choices||[]};
+      if(fourEnabled())buildChoices();
+      displayFrame();
+    }
+    if(challenge==="communityle"){
+      communityleSolution={id:data.revealedEpisode||null,url:data.round.images[0]};
+      renderCommunityle();
+    }
+    updateProgress();
+    if(data.finished) {
+      if(challenge==="daily")finishDaily();
+      else if(challenge==="communityle")finishCommunityle();
+      else finishGame("Game over! Final score: "+score+".");
+    }else if(data.awaitingNext) {
+      if(data.lastCorrect===false){
+        currentRound.id=data.revealedEpisode;
+        pauseAfterWrongAnswer("Wrong! Correct answer: "+label(byId[data.revealedEpisode])+".");
+      }else{
+        // If the page was reloaded between a correct guess and the next round,
+        // finish advancing the already-verified server session.
+        Promise.resolve().then(()=>createRound());
+      }
+    }
+  }
+  async function loadServerRound(action,extra={}) {
+    const version=epoch;
+    remoteBusy=true;input.disabled=true;button.disabled=true;
+    timelineSubmit.disabled=true;
+    fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
+    feedback.textContent="Loading screenshot…";
+    try{
+      const response=await requestGame(action,extra);
+      if(version!==epoch)return;
+      feedback.textContent="";
+      input.disabled=false;button.disabled=false;timelineSubmit.disabled=false;
+      applyServerRound(response);
+    }catch(error){
+      if(version===epoch)showServerFailure(error);
+    }finally{
+      if(version===epoch)remoteBusy=false;
+    }
+  }
   function resetGame() {
     closeCommunityleResult();
     communityleShowResult.hidden=true;
@@ -1030,57 +1040,50 @@
     });
     timelineMotionAnimations=[];
     timelineBoard.classList.remove("reordering","solved","incorrect");
-    clearBoard();
-    clearAnswerReveal();
-    fullEpisodeListOpened = false;
-    inputWasFocusedOnPointerDown = false;
+    clearBoard();clearAnswerReveal();
+    fullEpisodeListOpened=false;
+    inputWasFocusedOnPointerDown=false;
     ++epoch;
-    currentRound = null;
-    pending = [];
-    previousId = "";
-    score = 0; answered = 0; lives = challenge === "custom" ? customLives : 3; gameOver = false;
-    awaitingNext = false; showUnmodifiedAnswer = false;
-    selected = null; highlighted = -1; visible = [];
-    currentFrame = 0; revealStage = 1; timelineSelection = -1;
-    input.value = ""; input.disabled = false; button.disabled = false;
-    button.textContent = "Guess"; button.hidden = false;
+    currentRound=null;sessionId=null;remoteBusy=false;
+    pending=[];previousId="";
+    score=0;answered=0;lives=challenge==="custom"?customLives:1;gameOver=false;
+    awaitingNext=false;showUnmodifiedAnswer=false;
+    selected=null;highlighted=-1;visible=[];
+    currentFrame=0;revealStage=1;timelineSelection=-1;
+    input.value="";input.disabled=false;button.disabled=false;
+    button.textContent="Guess";button.hidden=false;
     textAnswer.classList.remove("replay-only");
-    feedback.classList.remove("is-wrong","is-correct");
-    feedback.textContent = "";
+    feedback.classList.remove("is-wrong","is-correct");feedback.textContent="";
     closeSuggestions();
-    scoreEl.textContent = "0";
-    high = loadHigh(); highEl.textContent = String(high);
+    scoreEl.textContent="0";
+    high=loadHigh();highEl.textContent=String(high);
     updateShell();
-    if (challenge === "communityle" || challenge === "daily") loadedDailyDate=dailyDate();
-    else loadedDailyDate=null;
-    if (challenge === "communityle") {
-      communityleSolution = communityleSchedule();
-      if (!communityleSolution) { finishGame("No episode images available."); return; }
-      communityleHistory = readCommunityle(communityleSolution);
-      currentRound = {id: communityleSolution.id, frames: [createFrame(communityleSolution.url)]};
-      renderCommunityle();
-      displayFrame();
-      if (communityleDone()) finishCommunityle();
+    loadedDailyDate=(challenge==="daily"||challenge==="communityle")?dailyDate():null;
+    communityleHints={};communityleHistory=[];communityleCompleted=false;
+    communityleSolution=null;dailyPlan=[];dailyAnswers=[];dailyGuesses=[];
+    if(challenge==="custom"&&!customStarted){
+      progressDetail.textContent="";
       return;
     }
-    if (challenge === "custom" && !customStarted) {
-      progressDetail.textContent = "";
-      return;
-    }
-    if (challenge === "daily") {
-      dailyPlan = dailySchedule();
-      dailyAnswers = readDaily();
-      dailyGuesses = readDailyGuesses();
-      answered = dailyAnswers.length;
-      score = dailyAnswers.filter(Boolean).length;
-      scoreEl.textContent = String(score);
-      if (answered >= dailyPlan.length) {
-        finishDaily();
-        return;
-      }
-    }
-    createRound();
+    const useResume=!hasBooted||challenge==="daily"||challenge==="communityle";
+    hasBooted=true;
+    let resume=null;
+    if(useResume)try{resume=localStorage.getItem(sessionStoreKey());}catch(_){}
+    loadServerRound("start",{settings:gameSettings(),resume});
   }
+  function createRound() {
+    if(gameOver||remoteBusy)return;
+    currentFrame=0;revealStage=1;selected=null;
+    awaitingNext=false;showUnmodifiedAnswer=false;
+    input.value="";input.disabled=false;button.disabled=false;
+    button.hidden=false;button.textContent="Guess";
+    textAnswer.classList.remove("replay-only");
+    if(fourEnabled()){fourChoices.hidden=false;textAnswer.hidden=true;}
+    else if(challenge!=="timeline"){fourChoices.hidden=true;textAnswer.hidden=false;}
+    closeSuggestions();feedback.textContent="";
+    loadServerRound("next");
+  }
+
   function activate(name) {
     if (!challengeNames[name]) return;
     challenge = name;
@@ -1113,34 +1116,6 @@
     if (challenge === "custom") return playable.filter(ep => customSeasons.includes(seasonNumber(ep)));
     return playable;
   }
-  function refillQueue() {
-    const eligible = episodePool().map(ep => ep.id);
-    pending = randomShuffle(eligible);
-    if (pending.length > 1 && pending[pending.length - 1] === previousId) {
-      [pending[0], pending[pending.length - 1]] = [pending[pending.length - 1], pending[0]];
-    }
-  }
-  function nextId() {
-    if (!pending.length) {
-      if ((challenge === "one110" || customHas("once")) && answered > 0) return null;
-      refillQueue();
-    }
-    const id = pending.pop();
-    previousId = id;
-    return id;
-  }
-  function imageUrlsFor(id) {
-    const urls = imagePool[id];
-    if (!urls || !urls.length) return [];
-    if (threeEnabled() && urls.length >= 3) {
-      return [0, 1, 2].map(part => {
-        const start = Math.floor(part * urls.length / 3);
-        const end = Math.floor((part + 1) * urls.length / 3);
-        return urls[start + Math.floor(Math.random() * (end - start))];
-      });
-    }
-    return [urls[Math.floor(Math.random() * urls.length)]];
-  }
   function createFrame(url, displayEpoch) {
     const img = new Image();
     img.alt = "Screenshot from a Community episode";
@@ -1172,63 +1147,6 @@
       img.src = url;
     });
     return frame;
-  }
-  function createRound() {
-    if (gameOver) return;
-    currentFrame = 0; revealStage = 1; selected = null;
-    timelineSelection = -1; awaitingNext = false; showUnmodifiedAnswer = false;
-    input.value = ""; input.disabled = false; button.disabled = false; button.hidden = false; button.textContent = "Guess";
-    textAnswer.classList.remove("replay-only");
-    if (fourEnabled()) { fourChoices.hidden = false; textAnswer.hidden = true; }
-    else if (challenge !== "timeline") { fourChoices.hidden = true; textAnswer.hidden = false; }
-    closeSuggestions();
-    // Only a list explicitly opened by the player persists across rounds.
-    // Simply focusing the input or typing a search never enables this.
-    if (fullEpisodeListOpened && showOnFocus && !fourEnabled() &&
-        challenge !== "timeline" && !gameOver) renderSuggestions();
-    feedback.textContent = "";
-    if (challenge === "timeline") {
-      // Choose three distinct episodes, including when a normal queue would
-      // cross a cycle boundary.
-      const picked = randomShuffle(episodePool().map(ep => ep.id)).slice(0, 3);
-      if (picked.length < 3) { finishGame("Not enough episodes to play."); return; }
-      currentRound = { id:picked[0], timeline:picked };
-      // Explicitly allow an already-correct sequence about 10% of the time.
-      const chronological = picked.slice().sort((a,b) =>
-        episodes.findIndex(ep=>ep.id===a)-episodes.findIndex(ep=>ep.id===b));
-      if (Math.random() < 0.10) {
-        timelineOrder = chronological;
-      } else {
-        timelineOrder = randomShuffle(picked.slice());
-        // The remaining 90% should actually require reordering.
-        if (timelineOrder.every((id,i)=>id===chronological[i])) {
-          [timelineOrder[0],timelineOrder[1]]=[timelineOrder[1],timelineOrder[0]];
-        }
-      }
-      renderTimeline();
-      updateProgress();
-      return;
-    }
-    let id, urls;
-    if (challenge === "daily") {
-      const step = dailyPlan[answered];
-      if (!step) { finishDaily(); return; }
-      id = step.id; urls = [step.url];
-    } else {
-      id = nextId();
-      if (!id) {
-        finishGame(challenge === "custom"
-          ? "Challenge complete! All selected episodes have been played."
-          : "All 110 episodes completed! A perfect run.");
-        return;
-      }
-      urls = imageUrlsFor(id);
-    }
-    const displayEpoch = epoch;
-    currentRound = { id, frames:urls.map(url => createFrame(url, displayEpoch)) };
-    if (fourEnabled()) buildChoices();
-    updateProgress();
-    displayFrame();
   }
   function updateProgress() {
     let message = "";
@@ -1365,10 +1283,15 @@
   });
   previousFrameButton.addEventListener("click", () => moveFrame(-1));
   nextFrameButton.addEventListener("click", () => moveFrame(1));
-  revealNext.addEventListener("click", () => {
-    if (!revealEnabled() || gameOver || awaitingNext || revealStage >= 5) return;
-    revealStage++;
-    displayFrame();
+  revealNext.addEventListener("click", async () => {
+    if (!revealEnabled() || gameOver || awaitingNext || revealStage >= 5 || remoteBusy) return;
+    remoteBusy=true;revealNext.disabled=true;
+    try {
+      const result=await requestGame("reveal");
+      revealStage=result.stage;
+      displayFrame();
+    } catch(error) { feedback.textContent=error.message; }
+    finally { remoteBusy=false;updateProgress(); }
   });
   document.addEventListener("keydown", event => {
     if (event.altKey || event.ctrlKey || event.metaKey || menu.classList.contains("open")) return;
@@ -1384,9 +1307,7 @@
     moveFrame(event.key === "ArrowRight" ? 1 : -1);
   });
   function buildChoices() {
-    const right = currentRound.id;
-    const distractors = randomShuffle(episodePool().filter(ep => ep.id !== right).map(ep => ep.id)).slice(0, 3);
-    choices = randomShuffle([right, ...distractors]);
+    choices = Array.isArray(currentRound?.choices) ? currentRound.choices.slice() : [];
     fourChoices.replaceChildren();
     choices.forEach(id => {
       const b = document.createElement("button");
@@ -1397,11 +1318,10 @@
     });
   }
   function timelineSortedIds() {
-    return currentRound.timeline.slice().sort((a,b)=>
-      episodes.findIndex(ep=>ep.id===a)-episodes.findIndex(ep=>ep.id===b));
+    return (currentRound?.timelineSolution || []).map(entry=>entry.token);
   }
   function timelineCanReorder() {
-    return challenge==="timeline" && !gameOver && !timelineRevealed;
+    return challenge==="timeline" && !gameOver && !timelineRevealed && !remoteBusy;
   }
   function timelineAnimationDuration() {
     // Follow OS reduced-motion preference without changing the saved choice.
@@ -1492,9 +1412,7 @@
       card.draggable=false;
       card.setAttribute("aria-label","Position "+(i+1)+", drag to reorder; use Alt+arrows with keyboard");
       const img=document.createElement("img");
-      const urls=imagePool[id];
-      const stored=currentRound["timelineImage-"+id]||
-        (currentRound["timelineImage-"+id]=urls[Math.floor(Math.random()*urls.length)]);
+      const stored=currentRound.timelineImages[id];
       img.src=stored;
       img.alt="Unknown Community episode screenshot";
       img.draggable=false;
@@ -1595,11 +1513,11 @@
       if(version!==timelineRevealVersion||challenge!=="timeline")return;
       const card=timelineCards.children[i];
       card.disabled=true;
-      card.setAttribute("aria-label","Position "+(i+1)+": "+label(byId[actual[i]]));
+      card.setAttribute("aria-label","Position "+(i+1)+": "+label(byId[currentRound.timelineAnswerLabels[actual[i]]]));
       const caption=card.querySelector(".timeline-handle");
       if(caption) {
         caption.className="timeline-answer";
-        caption.textContent=label(byId[actual[i]]);
+        caption.textContent=label(byId[currentRound.timelineAnswerLabels[actual[i]]]);
       }
       card.classList.add(correct?"is-solved":"is-incorrect");
       if(caption && popDuration>0 && caption.animate){
@@ -1630,8 +1548,7 @@
       createRound();
       return;
     }
-    const correct=timelineSortedIds().every((id,i)=>id===timelineOrder[i]);
-    answer(correct,correct?"":"The timeline was rearranged into the correct order.");
+    answer(timelineOrder.slice());
   });
   function finishGame(message, finalScore = score) {
     gameOver = true;
@@ -1713,92 +1630,107 @@
     feedback.textContent = message;
     updateProgress();
   }
-  function answer(value, correction = "") {
-    if (refreshDailyAtBoundary()) return;
-    if (gameOver || awaitingNext || !currentRound) return;
-    if (challenge === "communityle") {
-      if (typeof value !== "string" || !byId[value]) return;
-      if (communityleHistory.includes(value)) {
-        feedback.textContent = "You already guessed that episode.";
-        return;
-      }
-      communityleHistory.push(value);
-      saveCommunityle();
-      renderCommunityle();
-      input.value = "";
-      selected = null;
-      closeSuggestions();
-      if (communityleDone()) {
-        finishCommunityle();
-        return;
-      }
-      displayFrame();
-      const hints=communityleHint(value);
-      const summary=(hints[0]==="correct"?"Season correct. ":
-        hints[0]==="present"?"Season number belongs in the episode position. ":
-        "Season number absent. ")+
-        (hints[1]==="correct"?"Episode number correct. ":
-          hints[1]==="present"?"Episode number belongs in the season position. ":
-          "Episode number absent. ");
-      feedback.textContent=summary+"The picture is clearer now.";
-      if (autoFocusInput) input.focus();
-      return;
-    }
-    const correct = challenge === "timeline" ? value === true : value === currentRound.id;
-    answered++;
-    if (challenge === "daily") {
-      dailyAnswers.push(correct);
-      dailyGuesses.push(typeof value === "string" ? value : null);
-      saveDaily();
-      if (correct) { score++; setHigh(); }
-      scoreEl.textContent = String(score);
-      if (answered >= 5) { finishDaily(); return; }
-      const last = currentRound.id;
-      if (!correct) {
-        pauseAfterWrongAnswer("Wrong! Correct answer: " + label(byId[last]) + ".");
-      } else {
-        createRound();
-        feedback.textContent = "Correct! Next screenshot.";
-      }
-      return;
-    }
-    if (correct) {
-      score += revealEnabled() ? (6 - revealStage) : 1;
-      scoreEl.textContent = String(score);
-      setHigh();
-      if (challenge === "timeline") {
-        revealTimelineInPlace(true);
-        timelineSubmit.hidden=false;
-        timelineSubmit.textContent="Next timeline →";
-        feedback.textContent="Correct! Score: "+score+". Review the order before continuing.";
-        return;
-      }
-      if (challenge === "one110" && answered >= playable.length) {
-        finishGame("Perfect! You recognized all " + playable.length + " episodes.");
-        return;
-      }
-      if (customHas("once") && answered >= episodePool().length) {
-        finishGame("Challenge complete! All " + episodePool().length + " selected episodes played.");
-        return;
-      }
-      advance();
-      feedback.textContent = "Correct! Score: " + score;
-      if (autoFocusInput && !gameOver && !textAnswer.hidden) input.focus();
-      return;
-    }
-    if (challenge === "custom") {
-      lives--;
-      if (lives > 0) {
-        pauseAfterWrongAnswer("Wrong! Correct answer: " + label(byId[currentRound.id]) +
-          ". " + lives + " " + (lives === 1 ? "life" : "lives") + " left.");
+  async function answer(value, correction = "") {
+    if(refreshDailyAtBoundary())return;
+    if(gameOver||awaitingNext||!currentRound||remoteBusy||!sessionId)return;
+    if(challenge==="communityle"){
+      if(typeof value!=="string"||!byId[value])return;
+      if(communityleHistory.includes(value)){
+        feedback.textContent="You already guessed that episode.";
         return;
       }
     }
-    // Keep the final streak visible on Game over. resetGame() clears it only
-    // when the player actually chooses Play again.
-    let explanation = correction || (challenge === "timeline" ? "" : "Correct answer: " + label(byId[currentRound.id]));
-    finishGame("Game over! " + explanation + " · Final score: " + score + ".", score);
+    const version=epoch;
+    let startedNextRound=false;
+    remoteBusy=true;button.disabled=true;timelineSubmit.disabled=true;
+    fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
+    try{
+      const guess=challenge==="timeline"?timelineOrder.slice():value;
+      const result=await requestGame("guess",{guess});
+      if(version!==epoch)return;
+      score=result.score;answered=result.answered;lives=result.lives;
+      // Re-enable round advancement after the acknowledged server response.
+      remoteBusy=false;
+      scoreEl.textContent=String(score);setHigh();
+      currentRound.id=result.answer||null;
+      if(challenge==="timeline"){
+        currentRound.timelineSolution=result.timelineSolution||[];
+        currentRound.timelineAnswerLabels=Object.fromEntries(
+          (result.timelineSolution||[]).map(item=>[item.token,item.episode]));
+      }
+      button.disabled=false;timelineSubmit.disabled=false;
+      if(challenge==="communityle"){
+        communityleHistory=(result.guesses||[]).map(g=>g.id);
+        communityleHints=Object.fromEntries((result.guesses||[]).map(g=>[g.id,g.hints]));
+        communityleCompleted=result.finished;
+        if(result.finished)communityleSolution.id=result.answer;
+        renderCommunityle();
+        input.value="";selected=null;closeSuggestions();
+        if(result.finished){finishCommunityle();return;}
+        displayFrame();
+        const hints=communityleHint(value);
+        const summary=(hints[0]==="correct"?"Season correct. ":
+          hints[0]==="present"?"Season number belongs in the episode position. ":
+          "Season number absent. ")+
+          (hints[1]==="correct"?"Episode number correct. ":
+            hints[1]==="present"?"Episode number belongs in the season position. ":
+            "Episode number absent. ");
+        feedback.textContent=summary+"The picture is clearer now.";
+        if(autoFocusInput)input.focus();
+        return;
+      }
+      if(challenge==="daily"){
+        dailyPlan=(result.history||[]).map(h=>({id:h.id,url:h.url}));
+        dailyAnswers=(result.history||[]).map(h=>h.correct);
+        dailyGuesses=(result.history||[]).map(h=>h.guess);
+        if(result.finished){finishDaily();return;}
+        if(!result.correct)pauseAfterWrongAnswer(
+          "Wrong! Correct answer: "+label(byId[result.answer])+".");
+        else{
+          startedNextRound=true;
+          createRound();
+          feedback.textContent="Correct! Next screenshot.";
+        }
+        return;
+      }
+      if(result.correct){
+        if(challenge==="timeline"){
+          revealTimelineInPlace(true);
+          timelineSubmit.hidden=false;
+          timelineSubmit.textContent="Next timeline →";
+          feedback.textContent="Correct! Score: "+score+". Review the order before continuing.";
+          return;
+        }
+        if(result.finished){
+          finishGame(challenge==="one110"?"Perfect! You recognized all 110 episodes.":
+            "Challenge complete! All selected episodes have been played.");
+          return;
+        }
+        startedNextRound=true;
+        advance();
+        feedback.textContent="Correct! Score: "+score;
+        if(autoFocusInput&&!gameOver&&!textAnswer.hidden)input.focus();
+        return;
+      }
+      if(challenge==="custom"&&!result.finished&&lives>0){
+        pauseAfterWrongAnswer("Wrong! Correct answer: "+label(byId[result.answer])+
+          ". "+lives+" "+(lives===1?"life":"lives")+" left.");
+        return;
+      }
+      const explanation=challenge==="timeline"?"The timeline was rearranged into the correct order.":
+        "Correct answer: "+label(byId[result.answer]);
+      finishGame("Game over! "+explanation+" · Final score: "+score+".",score);
+    }catch(error){
+      if(version===epoch){
+        feedback.textContent=error.message;
+        button.disabled=false;timelineSubmit.disabled=false;
+        fourChoices.querySelectorAll("button").forEach(b=>b.disabled=false);
+      }
+    }finally{
+      if(version===epoch&&!startedNextRound)remoteBusy=false;
+    }
   }
+
   function resolveInput() {
     const matches = search(input.value);
     const candidate = selected || (matches.length === 1 ? matches[0] : null);
