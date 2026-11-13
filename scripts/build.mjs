@@ -6,6 +6,6 @@ for(const directory of ["assets","css"]){
   await cp(directory,"dist/"+directory,{recursive:true});
 }
 await mkdir("dist/js",{recursive:true});
-for(const file of ["js/episodes.js","js/game.js","index.html","_routes.json"]){
+for(const file of ["js/episodes.js","js/daily-share.js","js/game.js","index.html","_routes.json"]){
   await copyFile(file,"dist/"+file);
 }
