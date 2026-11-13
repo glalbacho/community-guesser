@@ -152,48 +152,48 @@ test("Daily Challenge does not end after an incorrect guess before round five",a
 });
 
 
-test("Zero-point runs may claim the first three positions, but only the Top 3 remain",async()=>{
+test("A zero-point game cannot qualify; only the best three positive scores remain",async()=>{
   const db=createDb();await setup(db);
   const mode="classic:normal";
-  const submit=async (session,name)=>leaderboard({
+  const submit=async(session,name)=>leaderboard({
     request:new Request("https://example.test/api/leaderboard",{
       method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({mode,name,score:999999,session})
     }),env:{DB:db}
   });
-  const finish=async (points)=>{
+  const finish=async(points)=>{
     const game=await start(db,{challenge:"classic",mode:"normal"});
     for(let i=0;i<points;i++){
-      const answer=privateGame(db,game.session).current.episode;
-      const accepted=await call(db,{action:"guess",session:game.session,guess:answer});
-      assert.equal(accepted.correct,true);
+      const correct=privateGame(db,game.session).current.episode;
+      assert.equal((await call(db,{action:"guess",session:game.session,guess:correct})).correct,true);
       await call(db,{action:"next",session:game.session});
     }
-    const answer=privateGame(db,game.session).current.episode;
-    const wrong=EPISODES.find(id=>id!==answer);
-    const done=await call(db,{action:"guess",session:game.session,guess:wrong});
-    assert.equal(done.finished,true);
-    assert.equal(done.score,points);
+    const correct=privateGame(db,game.session).current.episode;
+    const wrong=EPISODES.find(x=>x!==correct);
+    assert.equal((await call(db,{action:"guess",session:game.session,guess:wrong})).finished,true);
     return game.session;
   };
-  const first=await finish(0);
-  assert.equal((await submit(first,"A")).status,201);
-  const second=await finish(0);
-  assert.equal((await submit(second,"BB")).status,201);
-  const third=await finish(0);
-  assert.equal((await submit(third,"CCC")).status,201);
+  const zero=await finish(0);
+  assert.equal((await submit(zero,"Zero")).status,400);
+  assert.equal(db.scores.length,0);
+  const first=await finish(1);
+  assert.equal((await submit(first,"One")).status,201);
+  const second=await finish(1);
+  assert.equal((await submit(second,"Two")).status,201);
+  const third=await finish(1);
+  assert.equal((await submit(third,"Three")).status,201);
   assert.equal(db.scores.length,3);
-  const fourth=await finish(0);
-  assert.equal((await submit(fourth,"DDDD")).status,409,"A tie does not displace the earlier third place");
+  const fourth=await finish(1);
+  assert.equal((await submit(fourth,"Tie")).status,409,
+    "A tied score never displaces the earlier third place");
   assert.equal(db.scores.length,3);
-  const fifth=await finish(1);
-  assert.equal((await submit(fifth,"EEEEE")).status,201);
+  const fifth=await finish(2);
+  assert.equal((await submit(fifth,"Winner")).status,201);
   assert.equal(db.scores.length,3);
-  assert.deepEqual(db.scores.map(x=>x.score).sort((a,b)=>b-a),[1,0,0]);
+  assert.deepEqual(db.scores.map(x=>x.score).sort((a,b)=>b-a),[2,1,1]);
   const request=new Request("https://example.test/api/leaderboard?mode=classic%3Anormal");
   const response=await (await leaderboard({request,env:{DB:db}})).json();
   assert.equal(response.entries.length,3);
-  assert.equal("minimum" in response,false);
 });
 
 test("Leaderboard nicknames allow 1 to 20 characters and reject more",async()=>{
@@ -201,7 +201,10 @@ test("Leaderboard nicknames allow 1 to 20 characters and reject more",async()=>{
   const finishWrong=async()=>{
     const game=await start(db,{challenge:"classic",mode:"hard"});
     const answer=privateGame(db,game.session).current.episode;
-    const wrong=EPISODES.find(id=>id!==answer);
+    assert.equal((await call(db,{action:"guess",session:game.session,guess:answer})).correct,true);
+    await call(db,{action:"next",session:game.session});
+    const secondAnswer=privateGame(db,game.session).current.episode;
+    const wrong=EPISODES.find(id=>id!==secondAnswer);
     assert.equal((await call(db,{action:"guess",session:game.session,guess:wrong})).finished,true);
     return game.session;
   };
@@ -217,4 +220,41 @@ test("Leaderboard nicknames allow 1 to 20 characters and reject more",async()=>{
   const second=await finishWrong();
   assert.equal((await submit("Y",second)).status,201);
   assert.equal(db.scores.length,2);
+});
+
+
+test("Resume and leaderboard query know a previously submitted session",async()=>{
+  const db=createDb();await setup(db);
+  const game=await start(db,{challenge:"classic",mode:"normal"});
+  assert.equal(game.submitted,false);
+  const correct=privateGame(db,game.session).current.episode;
+  await call(db,{action:"guess",session:game.session,guess:correct});
+  await call(db,{action:"next",session:game.session});
+  const answer=privateGame(db,game.session).current.episode;
+  await call(db,{action:"guess",session:game.session,guess:EPISODES.find(x=>x!==answer)});
+  const response=await leaderboard({
+    request:new Request("https://example.test/api/leaderboard",{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({mode:"classic:normal",name:"Player",session:game.session})
+    }),env:{DB:db}
+  });
+  assert.equal(response.status,201);
+  const resumed=await start(db,{challenge:"classic",mode:"normal"},game.session);
+  assert.equal(resumed.submitted,true);
+  const query=new Request("https://example.test/api/leaderboard?mode=classic%3Anormal&session="+game.session);
+  assert.equal((await (await leaderboard({request:query,env:{DB:db}})).json()).submitted,true);
+});
+
+test("AutoNext selects the next secret frame atomically without leaking its episode",async()=>{
+  const db=createDb();await setup(db);
+  const game=await start(db,{challenge:"classic",mode:"normal"});
+  const previous=privateGame(db,game.session).current.episode;
+  const result=await call(db,{action:"guess",session:game.session,guess:previous,autoNext:true});
+  assert.equal(result.correct,true);
+  assert.equal(result.answer,previous);
+  assert.equal(result.autoAdvanced,true);
+  assert.equal(result.awaitingNext,false);
+  assert.equal(result.revealedEpisode,undefined);
+  assert.match(result.round.images[0],/^\/api\/frame\//);
+  assert.equal((await action(db,{action:"next",session:game.session})).status,409);
 });
