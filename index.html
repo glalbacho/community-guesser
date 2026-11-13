@@ -128,6 +128,10 @@
         <button type="button" id="restart-challenge" class="restart-challenge" hidden>Play again</button>
 
       </form>
+      <div class="daily-result-action" id="daily-result-action" hidden>
+        <button type="button" id="daily-show-result" class="daily-result-open">🎬 Share my Daily Challenge result</button>
+        <p>Five episodes, five guesses. Share your score without spoilers.</p>
+      </div>
       <section id="answer-reveal" class="answer-reveal" aria-label="Answer reveal" aria-live="polite" hidden>
         <div class="answer-reveal-heading"><span class="answer-reveal-icon" aria-hidden="true">✓</span><div><span class="answer-reveal-eyebrow">ROUND RECAP</span><h2 id="answer-reveal-title">Correct answer</h2></div></div>
         <p id="answer-reveal-detail" class="answer-reveal-detail"></p>
@@ -156,6 +160,26 @@
           <p class="leaderboard-note">Your nickname and score are public. Don't enter private information.</p>
           <button type="button" id="leaderboard-modal-later" class="leaderboard-modal-later">Not now</button>
         </form>
+      </section>
+    </div>
+    <div id="daily-result-modal" class="daily-result-modal" hidden>
+      <div class="daily-result-backdrop" id="daily-result-backdrop"></div>
+      <section class="daily-result-dialog" role="dialog" aria-modal="true" aria-labelledby="daily-result-title" aria-describedby="daily-result-description" tabindex="-1">
+        <button type="button" id="daily-result-close" class="daily-result-close" aria-label="Close Daily Challenge result">×</button>
+        <div class="daily-result-eyebrow">COMMUNITY GUESSER · DAILY</div>
+        <div class="daily-result-symbol" aria-hidden="true">🎬</div>
+        <h2 id="daily-result-title">Your daily scorecard</h2>
+        <p id="daily-result-description">Five different episodes. One guess each. Here's how you did.</p>
+        <div id="daily-result-score" class="daily-result-score"></div>
+        <div id="daily-result-date" class="daily-result-date"></div>
+        <div class="daily-rounds-title">Your five rounds</div>
+        <ol id="daily-result-rounds" class="daily-result-rounds"></ol>
+        <p class="daily-result-invite">Challenge your friends with the same five screenshots — no episode spoilers.</p>
+        <div class="daily-result-actions">
+          <button type="button" id="daily-result-share">↗ Share result</button>
+          <button type="button" id="daily-result-copy">Copy result</button>
+        </div>
+        <p id="daily-result-status" class="daily-result-status" role="status" aria-live="polite"></p>
       </section>
     </div>
     <div id="communityle-result-modal" class="communityle-result-modal" hidden>
@@ -198,7 +222,7 @@
         <button type="button" id="highscores-back" class="highscores-back">← Back to game</button>
         <span class="highscores-overline">COMMUNITY GUESSER</span>
         <h2>Hall of Fame</h2>
-        <p>Website-wide Top 3 for every game mode. Daily boards reset by date; custom configurations have separate rankings.</p>
+        <p>Website-wide Top 3 for streak and challenge modes. Daily Challenge and Community-le use private, shareable results instead.</p>
       </div>
       <p id="highscores-status" class="highscores-status" role="status" aria-live="polite"></p>
       <div id="highscores-grid" class="highscores-grid"></div>
@@ -206,6 +230,7 @@
     </section>
   </div>
   <script src="js/episodes.js"></script>
+  <script src="js/daily-share.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>
