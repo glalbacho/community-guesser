@@ -258,3 +258,26 @@ test("AutoNext selects the next secret frame atomically without leaking its epis
   assert.match(result.round.images[0],/^\/api\/frame\//);
   assert.equal((await action(db,{action:"next",session:game.session})).status,409);
 });
+
+test("Daily Challenge and Community-le have no website ranking, even via direct API calls",async()=>{
+  const db=createDb();await setup(db);
+  // Pre-existing records (if any) should not appear in the public catalog.
+  db.scores.push(
+    {id:200,mode:"daily:2026-11-13",name:"Old Daily",score:5,created_at:1},
+    {id:201,mode:"communityle:2026-11-13",name:"Old Wordle",score:6,created_at:1},
+    {id:202,mode:"classic:normal",name:"Existing",score:10,created_at:1}
+  );
+  for(const mode of ["daily:2026-11-13","communityle:2026-11-13"]){
+    const get=new Request("https://example.test/api/leaderboard?mode="+encodeURIComponent(mode));
+    assert.equal((await leaderboard({request:get,env:{DB:db}})).status,400);
+    const post=new Request("https://example.test/api/leaderboard",{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({mode,name:"Attempt",session:"fake"})
+    });
+    assert.equal((await leaderboard({request:post,env:{DB:db}})).status,400);
+  }
+  const catalog=new Request("https://example.test/api/leaderboard?catalog=1");
+  const data=await (await leaderboard({request:catalog,env:{DB:db}})).json();
+  assert.ok(data.boards.some(b=>b.mode==="classic:normal"));
+  assert.equal(data.boards.some(b=>/^(daily|communityle):/.test(b.mode)),false);
+});
