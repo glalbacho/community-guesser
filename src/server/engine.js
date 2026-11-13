@@ -275,8 +275,9 @@ export async function action(db,payload) {
       return json({error:"Invalid episode selection."},400);
     correct=guess===s.current.episode;
   }
+  const completedEpisode=s.current.episode||null;
   s.answered++;
-  s.history.push({episode:s.current.episode||null,images:s.current.images,
+  s.history.push({episode:completedEpisode,images:s.current.images,
     guess,correct});
   if(correct) s.score+=c.challenge==="daily"?1:revealEnabled(c)?6-s.stage:1;
   if(c.challenge==="daily") {
@@ -289,8 +290,16 @@ export async function action(db,payload) {
     if(c.challenge==="custom"&&--s.lives>0)s.awaitingNext=true;
     else s.finished=true;
   } else if(!s.finished)s.awaitingNext=true;
+  // Normal correct answers can select the next frame in the SAME API call.
+  // Timeline and incorrect guesses retain their deliberate reveal/Next step.
+  let autoAdvanced=false;
+  if(payload.autoNext===true&&correct&&s.awaitingNext&&c.challenge!=="timeline"){
+    s.awaitingNext=false;s.stage=1;
+    await makeRound(db,s);
+    autoAdvanced=true;
+  }
   if(!await persist(db,row))return json({error:"Please retry."},409);
-  return json({...publicState(s),correct,answer:s.current.episode,
+  return json({...publicState(s),correct,answer:completedEpisode,autoAdvanced,
     ...(s.current.timeline?{timelineSolution:s.current.timeline.slice()
       .sort((a,b)=>EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode))
       .map(im=>({token:im.token,episode:im.episode}))}:{})});
