@@ -193,7 +193,9 @@
       method:"POST",headers:{"content-type":"application/json"},
       cache:"no-store",body:JSON.stringify({action,session:sessionId,...details})
     });
-    const value=await response.json();
+    let value;
+    try { value=await response.json(); }
+    catch(_) { throw new Error("Secure game API not available. This site must be deployed on Cloudflare Pages with Functions enabled."); }
     if(!response.ok)throw new Error(value.error||"The game server is unavailable.");
     return value;
   }
