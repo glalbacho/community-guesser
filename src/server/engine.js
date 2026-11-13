@@ -135,7 +135,15 @@ async function makeRound(db,s) {
   }
   if(c.challenge==="timeline"){
     const picks=shuffled(eligible(c)).slice(0,3);
-    const items=picks.map(episode=>imageEntry(episode,chooseFrames(episode)[0]));
+    const chronological=picks.slice().sort((a,b)=>EPISODES.indexOf(a)-EPISODES.indexOf(b));
+    let order;
+    if(Math.random()<0.10)order=chronological.slice();
+    else {
+      order=shuffled(picks);
+      if(order.every((id,i)=>id===chronological[i]))
+        [order[0],order[1]]=[order[1],order[0]];
+    }
+    const items=order.map(episode=>imageEntry(episode,chooseFrames(episode)[0]));
     s.current={timeline:items,images:items};
     return;
   }
