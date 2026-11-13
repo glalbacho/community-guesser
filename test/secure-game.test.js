@@ -136,3 +136,17 @@ test("Leaderboard accepts only a completed session and ignores any client-report
   assert.equal(db.scores[0].score,10);
   assert.equal((await leaderboard({request:submit(),env:{DB:db}})).status,409);
 });
+
+test("Daily Challenge does not end after an incorrect guess before round five",async()=>{
+  const db=createDb();await setup(db);
+  const round=await start(db,{challenge:"daily"});
+  const secret=privateGame(db,round.session).current.episode;
+  const wrong=EPISODES.find(id=>id!==secret);
+  const result=await call(db,{action:"guess",session:round.session,guess:wrong});
+  assert.equal(result.finished,false);
+  assert.equal(result.awaitingNext,true);
+  assert.equal(result.answer,secret);
+  const next=await call(db,{action:"next",session:round.session});
+  assert.equal(next.answered,1);
+  assert.equal(next.revealedEpisode,undefined);
+});
