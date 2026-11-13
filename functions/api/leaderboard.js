@@ -38,7 +38,10 @@ export async function onRequest({request,env}){
       }
       const mode=q.get("mode");
       if(!allowedMode(mode))return json({error:"Invalid mode."},400);
-      return json({entries:publicRows(await getBoard(env.DB,mode))});
+      const sessionId=q.get("session");
+      const found=sessionId?await load(env.DB,sessionId):null;
+      return json({entries:publicRows(await getBoard(env.DB,mode)),
+        submitted:found?.mode===mode&&found.submitted===1});
     }
     if(Number(request.headers.get("content-length"))>2048)return json({error:"Request too large."},413);
     let input;
@@ -53,11 +56,11 @@ export async function onRequest({request,env}){
       return json({error:"A completed, server-verified game is required."},403);
     if(session.submitted)return json({error:"This result has already been submitted."},409);
     const score=session.state.score;
-    if(!Number.isInteger(score)||score<0||score>100000||
+    if(!Number.isInteger(score)||score<1||score>100000||
       /^daily:/.test(input.mode)&&score>5||
       /^communityle:/.test(input.mode)&&score>6||
       input.mode==="challenge:one110"&&score>110)
-      return json({error:"Invalid verified score."},400);
+      return json({error:"At least 1 verified point is required."},400);
     const before=await getBoard(env.DB,input.mode);
     if(before.length===3&&score<=before[2].score)
       return json({error:"This result is not in the website Top 3.",accepted:false,entries:publicRows(before)},409);
