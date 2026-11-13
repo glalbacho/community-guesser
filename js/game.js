@@ -1714,6 +1714,8 @@
       const result=await requestGame("guess",{guess});
       if(version!==epoch)return;
       score=result.score;answered=result.answered;lives=result.lives;
+      // Re-enable round advancement after the acknowledged server response.
+      remoteBusy=false;
       scoreEl.textContent=String(score);setHigh();
       currentRound.id=result.answer||null;
       if(challenge==="timeline"){
