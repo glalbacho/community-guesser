@@ -20,6 +20,13 @@
   const textAnswer = $("text-answer"), fourChoices = $("four-choices");
   const communityleBoard = $("communityle-board"), communityleDate = $("communityle-date");
   const communityleAttempts = $("communityle-attempts"), communityleGuesses = $("communityle-guesses");
+  const dailyResultModal=$("daily-result-modal"),dailyResultAction=$("daily-result-action");
+  const dailyShowResult=$("daily-show-result"),dailyResultClose=$("daily-result-close");
+  const dailyResultBackdrop=$("daily-result-backdrop"),dailyResultScore=$("daily-result-score");
+  const dailyResultDate=$("daily-result-date"),dailyResultRounds=$("daily-result-rounds");
+  const dailyResultStatus=$("daily-result-status"),dailyResultShare=$("daily-result-share");
+  const dailyResultCopy=$("daily-result-copy");
+  let dailyResultPreviousFocus=null;
   const communityleResultModal = $("communityle-result-modal");
   const communityleShowResult = $("communityle-show-result");
   const communityleResultClose = $("communityle-result-close");
@@ -508,6 +515,95 @@
       communityleGuesses.appendChild(row);
     }
   }
+  function dailyShareUrl(){
+    const base=window.location?.origin&&window.location?.pathname
+      ? window.location.origin+window.location.pathname
+      : "https://community-guesser.pages.dev/";
+    return base+"#/daily";
+  }
+  function dailyShareText(){
+    return window.COMMUNITY_DAILY_SHARE(loadedDailyDate||dailyDate(),dailyAnswers,dailyShareUrl());
+  }
+  function closeDailyResult(){
+    if(dailyResultModal.hidden)return;
+    dailyResultModal.hidden=true;
+    if(dailyResultPreviousFocus?.isConnected&&!dailyResultPreviousFocus.disabled
+      &&!dailyResultPreviousFocus.hidden)dailyResultPreviousFocus.focus();
+    dailyResultPreviousFocus=null;
+  }
+  function openDailyResult(){
+    if(challenge!=="daily"||!gameOver||dailyAnswers.length!==5)return;
+    dailyResultScore.textContent=dailyAnswers.filter(Boolean).length+" / 5 correct";
+    dailyResultDate.textContent="Daily Challenge · "+(loadedDailyDate||dailyDate());
+    dailyResultRounds.replaceChildren();
+    dailyAnswers.forEach((won,index)=>{
+      const item=document.createElement("li");
+      item.className=won?"won":"missed";
+      const round=document.createElement("span");
+      round.className="daily-round-number";
+      round.textContent="Round "+(index+1);
+      const status=document.createElement("span");
+      status.className="daily-round-outcome";
+      const symbol=document.createElement("span");
+      symbol.textContent=won?"✅":"❌";
+      symbol.setAttribute("aria-hidden","true");
+      status.appendChild(symbol);
+      status.appendChild(document.createTextNode(won?"Correct":"Missed"));
+      item.appendChild(round);
+      item.appendChild(status);
+      item.setAttribute("aria-label","Round "+(index+1)+": "+(won?"correct":"missed"));
+      dailyResultRounds.appendChild(item);
+    });
+    dailyResultStatus.textContent="";
+    dailyResultPreviousFocus=document.activeElement;
+    dailyResultModal.hidden=false;
+    dailyResultClose.focus();
+  }
+  async function copyDailyResult(){
+    const content=dailyShareText();
+    try{
+      if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(content);
+      else{
+        const field=document.createElement("textarea");
+        field.value=content;field.setAttribute("readonly","");
+        field.style.position="fixed";field.style.opacity="0";
+        document.body.appendChild(field);
+        try{
+          field.select();
+          if(!document.execCommand||!document.execCommand("copy"))
+            throw new Error("Clipboard not available");
+        }finally{field.remove();}
+      }
+      dailyResultStatus.textContent="Result copied! Paste it anywhere.";
+    }catch(_){
+      dailyResultStatus.textContent="Could not copy. Try Share result instead.";
+    }
+  }
+  dailyShowResult.addEventListener("click",openDailyResult);
+  dailyResultClose.addEventListener("click",closeDailyResult);
+  dailyResultBackdrop.addEventListener("click",closeDailyResult);
+  dailyResultCopy.addEventListener("click",copyDailyResult);
+  dailyResultShare.addEventListener("click",async()=>{
+    const content=dailyShareText();
+    if(typeof navigator.share==="function"){
+      try{
+        await navigator.share({text:content});
+        dailyResultStatus.textContent="";
+        return;
+      }catch(error){if(error?.name==="AbortError")return;}
+    }
+    await copyDailyResult();
+  });
+  document.addEventListener("keydown",event=>{
+    if(dailyResultModal.hidden)return;
+    if(event.key==="Escape"){event.preventDefault();closeDailyResult();return;}
+    if(event.key==="Tab"){
+      const items=[dailyResultClose,dailyResultShare,dailyResultCopy];
+      const position=items.indexOf(document.activeElement);
+      if(event.shiftKey&&position<=0){event.preventDefault();items.at(-1).focus();}
+      else if(!event.shiftKey&&position===items.length-1){event.preventDefault();items[0].focus();}
+    }
+  });
   function communityleShareUrl() {
     // Use the exact hosted base path (Cloudflare Pages or a custom domain).
     // The existing #/communityle route works after a normal page reload.
@@ -1112,7 +1208,9 @@
   }
   function resetGame() {
     closeCommunityleResult();
+    closeDailyResult();
     communityleShowResult.hidden=true;
+    dailyResultAction.hidden=true;
     timelineRevealed=false;
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
@@ -1686,7 +1784,7 @@
     progressDetail.textContent = dailyDate() + " (Berlin) · 5 / 5";
     restart.hidden = true;
     showDailyAnswerReveal();
-    dailyShowResult.hidden=false;
+    dailyResultAction.hidden=false;
     const viewedKey="community-guesser-daily-result-viewed:"+sessionId;
     let alreadyViewed=false;
     try{alreadyViewed=localStorage.getItem(viewedKey)==="yes";}catch(_){}
