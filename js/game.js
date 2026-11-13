@@ -357,61 +357,12 @@
   }
   function dayKey() { return "community-guesser-daily-" + dailyDate(); }
   function communityleKey() { return "community-guesser-communityle-" + dailyDate(); }
-  function stableHash(text) {
-    let h = 2166136261;
-    for (let i = 0; i < text.length; i++) {
-      h ^= text.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  }
-  function seededRandom(seed) {
-    let x = seed || 1;
-    return () => {
-      x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
-      return (x >>> 0) / 4294967296;
-    };
-  }
   function randomShuffle(arr, random = Math.random) {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(random() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
-  }
-  function dailySchedule() {
-    const rng = seededRandom(stableHash("community-guesser:" + dailyDate()));
-    const picked = randomShuffle(playable.map(ep => ep.id), rng).slice(0, 5);
-    return picked.map(id => {
-      const urls = imagePool[id];
-      return { id, url: urls[Math.floor(rng() * urls.length)] };
-    });
-  }
-  // A seeded daily choice means everyone gets the same screenshot from
-  // 06:00 Berlin time until 06:00 Berlin time on the following day.
-  function communityleSchedule() {
-    const rng = seededRandom(stableHash("community-le-v1:" + dailyDate()));
-    const eligible = playable.slice().sort((a,b) => a.id.localeCompare(b.id));
-    if (!eligible.length) return null;
-    const ep = eligible[Math.floor(rng() * eligible.length)];
-    const urls = imagePool[ep.id];
-    return { id:ep.id, url:urls[Math.floor(rng() * urls.length)] };
-  }
-  function readCommunityle(solution) {
-    try {
-      const saved = JSON.parse(localStorage.getItem(communityleKey()) || "{}");
-      if (saved.solution !== solution.id || saved.url !== solution.url || !Array.isArray(saved.guesses)) return [];
-      const valid = [...new Set(saved.guesses.slice(0,6))];
-      return valid.filter(id => typeof id === "string" && byId[id]);
-    } catch (_) { return []; }
-  }
-  function saveCommunityle() {
-    if (!communityleSolution) return;
-    try {
-      localStorage.setItem(communityleKey(), JSON.stringify({
-        solution:communityleSolution.id, url:communityleSolution.url, guesses:communityleHistory
-      }));
-    } catch (_) {}
   }
   function communityleDone() {
     return communityleCompleted;
@@ -589,24 +540,6 @@
     openCommunityleResult();
     checkBoard(won ? 7 - communityleHistory.length : 0);
   }
-  function readDaily() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(dayKey()) || "{}");
-      return Array.isArray(saved.answers) ? saved.answers.slice(0, 5).map(v => v === true) : [];
-    } catch (_) { return []; }
-  }
-  function readDailyGuesses() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(dayKey()) || "{}");
-      if (!Array.isArray(saved.guesses)) return [];
-      return saved.guesses.slice(0, 5).map(id => typeof id === "string" && byId[id] ? id : null);
-    } catch (_) { return []; }
-  }
-  function saveDaily() {
-    try {
-      localStorage.setItem(dayKey(), JSON.stringify({ answers:dailyAnswers, guesses:dailyGuesses }));
-    } catch (_) {}
-  }
   function displayLabel(ep) {
     return ((challenge === "classic" && (mode === "hard" || mode === "impossible")) ||
       customHas("numbers")) ? ep.id : label(ep);
@@ -757,7 +690,7 @@
     if (kind) card.classList.add(kind);
     const img = document.createElement("img");
     img.className = "answer-reveal-image";
-    img.src = imageUrl || (imagePool[id] && imagePool[id][0]) || "";
+    img.src = imageUrl || "";
     img.alt = "Original screenshot from " + label(byId[id]);
     img.loading = "lazy";
     const meta = document.createElement("div");
