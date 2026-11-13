@@ -1,3 +1,4 @@
+import {rateLimit} from "../../src/server/rate-limit.js";
 // Verified website-wide high scores. The client never supplies an authoritative score.
 import { load, setup as setupGame, json } from "../../src/server/engine.js";
 
@@ -21,6 +22,9 @@ export async function onRequest({request,env}){
   if(!env.DB)return json({error:"Cloudflare D1 not configured. Bind a D1 database as DB."},503);
   if(!["GET","POST"].includes(request.method))return json({error:"Method not allowed."},405);
   try{
+    const limit=await rateLimit(env.DB,request,request.method==="POST"?"score-post":"score-read",
+      request.method==="POST"?12:240,300);
+    if(limit)return limit;
     await setup(env.DB);
     if(request.method==="GET"){
       const q=new URL(request.url).searchParams;
