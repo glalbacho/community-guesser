@@ -215,11 +215,8 @@
     if (challenge === "communityle") return "communityle:" + dailyDate();
     return "challenge:" + challenge;
   }
-  function boardMinimum() {
-    return challenge === "classic" ? (mode === "easy" ? 15 : 10) : 1;
-  }
   function scoreDescription(points) {
-    return challenge === "communityle" ? (7 - points) + " guesses" : points + " points";
+    return challenge === "communityle" ? (points === 0 ? "Unsolved" : (7 - points) + " guesses") : points + " points";
   }
   function clearBoard() {
     ++boardRequest;
@@ -266,14 +263,12 @@
       if (requestVersion !== boardRequest) return;
       if (!Array.isArray(result.entries)) throw new Error("Invalid response");
       const entries = result.entries;
-      const qualifies = finalScore >= boardMinimum() && (entries.length < 3 || finalScore > entries[2].score);
+      const qualifies = entries.length < 3 || finalScore > entries[2].score;
       if (qualifies) {
         boardStatus.textContent = "You made the website Top 3! Choose a nickname.";
         boardForm.hidden = false;
       } else {
-        boardStatus.textContent = finalScore < boardMinimum()
-          ? "At least " + boardMinimum() + " points are needed to enter this mode's Top 3."
-          : "Your score did not reach the website Top 3.";
+        boardStatus.textContent = "Your score did not reach the website Top 3.";
         displayBoard(entries);
       }
     } catch (_) {
@@ -285,8 +280,8 @@
     event.preventDefault();
     if (boardForm.hidden || !boardMode) return;
     const name = boardName.value.trim();
-    if (!/^[\p{L}\p{N} _.-]{2,20}$/u.test(name)) {
-      boardStatus.textContent = "Use 2–20 letters, numbers, spaces, dots, underscores or hyphens.";
+    if (!/^[\p{L}\p{N} _.-]{1,20}$/u.test(name)) {
+      boardStatus.textContent = "Use 1–20 letters, numbers, spaces, dots, underscores or hyphens.";
       return;
     }
     const requestVersion = boardRequest;
@@ -800,8 +795,7 @@
       card.className="highscores-card";
       const title=document.createElement("h3"); title.textContent=board.name;
       const caption=document.createElement("p"); caption.className="highscores-card-sub";
-      caption.textContent=board.mode==="classic:easy"?"Minimum 15 points":
-        board.mode.startsWith("classic:")?"Minimum 10 points":"Website Top 3";
+      caption.textContent="Website Top 3 · No minimum score";
       card.appendChild(title);card.appendChild(caption);
       if(!board.entries.length){
         const empty=document.createElement("p");empty.className="hs-empty";
@@ -813,7 +807,7 @@
           const name=document.createElement("span"); name.className="hs-name";
           name.textContent="#"+(i+1)+"  "+entry.name;
           const points=document.createElement("span");points.className="hs-points";
-          points.textContent=board.mode.startsWith("communityle:")?(7-entry.score)+" guesses":entry.score+" pts";
+          points.textContent=board.mode.startsWith("communityle:")?(entry.score===0?"Unsolved":(7-entry.score)+" guesses"):entry.score+" pts";
           li.appendChild(name);li.appendChild(points);list.appendChild(li);
         });
         card.appendChild(list);
