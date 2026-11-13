@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const episodes = window.COMMUNITY_EPISODES || [];
-  const imagePool = window.COMMUNITY_IMAGES || {};
+  // Screenshot-to-episode mapping is intentionally never shipped to the browser.
   const byId = Object.fromEntries(episodes.map(ep => [ep.id, ep]));
   const $ = id => document.getElementById(id);
   const input = $("episode-input"), suggestions = $("suggestions");
@@ -82,7 +82,7 @@
   const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const episodeNumber = ep => Number(ep.id.slice(4));
   const seasonNumber = ep => Number(ep.id.slice(1, 3));
-  const playable = episodes.filter(ep => Array.isArray(imagePool[ep.id]) && imagePool[ep.id].length);
+  const playable = episodes;
   let mode = "normal";
   try {
     const savedMode = localStorage.getItem(modeKey);
@@ -181,6 +181,28 @@
   let epoch = 0;
   let timelineDragging = null, timelineRevealed = false, timelineRevealVersion = 0;
   let timelineMotionAnimations = [];
+  let sessionId = null, remoteBusy = false, hasBooted = false;
+  let communityleHints = {}, communityleCompleted = false;
+  const sessionStoreKey = () => "community-guesser-session-v2:" + boardKey();
+  function gameSettings() {
+    return {challenge,mode,season,lives:customLives,
+      seasons:customSeasons.slice(),features:{...customFeatures}};
+  }
+  async function requestGame(action, details={}) {
+    const response=await fetch("/api/game",{
+      method:"POST",headers:{"content-type":"application/json"},
+      cache:"no-store",body:JSON.stringify({action,session:sessionId,...details})
+    });
+    const value=await response.json();
+    if(!response.ok)throw new Error(value.error||"The game server is unavailable.");
+    return value;
+  }
+  function showServerFailure(error) {
+    feedback.textContent = error?.message || "The game server is unavailable.";
+    feedback.classList.add("is-wrong");
+    input.disabled=true;button.disabled=true;
+    timelineSubmit.disabled=true;fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
+  }
 
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
@@ -271,7 +293,7 @@
     try {
       const response = await fetch("/api/leaderboard", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({mode:boardMode,name,score:boardScore})
+        body:JSON.stringify({mode:boardMode,name,session:sessionId})
       });
       const result = await response.json();
       if (requestVersion !== boardRequest) return;
@@ -392,32 +414,13 @@
     } catch (_) {}
   }
   function communityleDone() {
-    return !!communityleSolution && (
-      communityleHistory.includes(communityleSolution.id) || communityleHistory.length >= 6);
+    return communityleCompleted;
   }
   // Wordle's two-pass matching: exact locations first, then only the
   // remaining unmatched numbers may count as a misplaced match.
   // Index 0 = season; index 1 = episode number.
   function communityleHint(id) {
-    if(!byId[id] || !communityleSolution || !byId[communityleSolution.id])
-      return ["absent","absent"];
-    const guess=[seasonNumber(byId[id]),episodeNumber(byId[id])];
-    const target=[seasonNumber(byId[communityleSolution.id]),
-      episodeNumber(byId[communityleSolution.id])];
-    const result=["absent","absent"];
-    const available=target.slice();
-    for(let i=0;i<2;i++){
-      if(guess[i]===target[i]){
-        result[i]="correct";
-        available[i]=null;
-      }
-    }
-    for(let i=0;i<2;i++){
-      if(result[i]==="correct")continue;
-      const j=available.indexOf(guess[i]);
-      if(j!==-1){result[i]="present";available[j]=null;}
-    }
-    return result;
+    return communityleHints[id] || ["absent","absent"];
   }
   const communityleEmoji = state => state==="correct"?"🟩":
     state==="present"?"🟨":"⬛";
@@ -1365,10 +1368,15 @@
   });
   previousFrameButton.addEventListener("click", () => moveFrame(-1));
   nextFrameButton.addEventListener("click", () => moveFrame(1));
-  revealNext.addEventListener("click", () => {
-    if (!revealEnabled() || gameOver || awaitingNext || revealStage >= 5) return;
-    revealStage++;
-    displayFrame();
+  revealNext.addEventListener("click", async () => {
+    if (!revealEnabled() || gameOver || awaitingNext || revealStage >= 5 || remoteBusy) return;
+    remoteBusy=true;revealNext.disabled=true;
+    try {
+      const result=await requestGame("reveal");
+      revealStage=result.stage;
+      displayFrame();
+    } catch(error) { feedback.textContent=error.message; }
+    finally { remoteBusy=false;updateProgress(); }
   });
   document.addEventListener("keydown", event => {
     if (event.altKey || event.ctrlKey || event.metaKey || menu.classList.contains("open")) return;
@@ -1384,9 +1392,7 @@
     moveFrame(event.key === "ArrowRight" ? 1 : -1);
   });
   function buildChoices() {
-    const right = currentRound.id;
-    const distractors = randomShuffle(episodePool().filter(ep => ep.id !== right).map(ep => ep.id)).slice(0, 3);
-    choices = randomShuffle([right, ...distractors]);
+    choices = Array.isArray(currentRound?.choices) ? currentRound.choices.slice() : [];
     fourChoices.replaceChildren();
     choices.forEach(id => {
       const b = document.createElement("button");
@@ -1397,8 +1403,7 @@
     });
   }
   function timelineSortedIds() {
-    return currentRound.timeline.slice().sort((a,b)=>
-      episodes.findIndex(ep=>ep.id===a)-episodes.findIndex(ep=>ep.id===b));
+    return (currentRound?.timelineSolution || []).map(entry=>entry.token);
   }
   function timelineCanReorder() {
     return challenge==="timeline" && !gameOver && !timelineRevealed;
@@ -1492,9 +1497,7 @@
       card.draggable=false;
       card.setAttribute("aria-label","Position "+(i+1)+", drag to reorder; use Alt+arrows with keyboard");
       const img=document.createElement("img");
-      const urls=imagePool[id];
-      const stored=currentRound["timelineImage-"+id]||
-        (currentRound["timelineImage-"+id]=urls[Math.floor(Math.random()*urls.length)]);
+      const stored=currentRound.timelineImages[id];
       img.src=stored;
       img.alt="Unknown Community episode screenshot";
       img.draggable=false;
@@ -1595,11 +1598,11 @@
       if(version!==timelineRevealVersion||challenge!=="timeline")return;
       const card=timelineCards.children[i];
       card.disabled=true;
-      card.setAttribute("aria-label","Position "+(i+1)+": "+label(byId[actual[i]]));
+      card.setAttribute("aria-label","Position "+(i+1)+": "+label(byId[currentRound.timelineAnswerLabels[actual[i]]]));
       const caption=card.querySelector(".timeline-handle");
       if(caption) {
         caption.className="timeline-answer";
-        caption.textContent=label(byId[actual[i]]);
+        caption.textContent=label(byId[currentRound.timelineAnswerLabels[actual[i]]]);
       }
       card.classList.add(correct?"is-solved":"is-incorrect");
       if(caption && popDuration>0 && caption.animate){
@@ -1630,8 +1633,7 @@
       createRound();
       return;
     }
-    const correct=timelineSortedIds().every((id,i)=>id===timelineOrder[i]);
-    answer(correct,correct?"":"The timeline was rearranged into the correct order.");
+    answer(timelineOrder.slice());
   });
   function finishGame(message, finalScore = score) {
     gameOver = true;
