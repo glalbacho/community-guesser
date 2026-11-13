@@ -1,24 +1,30 @@
-# Website-wide Top 3 (Cloudflare Pages)
+# Community Guesser — Cloudflare Pages deployment
 
-This repository contains a Cloudflare Pages Function at `functions/api/leaderboard.js` serving `GET/POST /api/leaderboard`.
+The protected screenshot game and verified Top 3 high scores require **Cloudflare Pages Functions and D1**. This project cannot run the secure game on GitHub Pages alone: GitHub Pages does not execute \`/functions\`.
 
-**Required setup:** In the Cloudflare dashboard, create a **D1 SQL database** for Community Guesser. Open the Cloudflare Pages project that serves this repository, go to **Settings → Bindings** (or **Settings → Functions → D1 database bindings** depending on your dashboard), and bind the database under the variable name **`DB`**. Redeploy the site. The function creates its table and index on the first request.
+## Cloudflare setup (no paid services required at modest traffic)
 
-Without the D1 binding, the API deliberately returns HTTP 503 and **does not pretend browser-local scores are website-wide rankings**.
+1. Open Cloudflare Dashboard → **Workers & Pages** and select the Pages project connected to **glalbacho/community-guesser**. Make sure the Git deployment serves the root directory containing \`index.html\` and the repository's \`functions/\` directory.
+2. Under **D1 SQL Database**, create a free database, e.g. \`community-guesser-db\`, unless you already have a D1 database for the project.
+3. In the Pages project, open **Settings → Bindings → Add → D1 database bindings**. Set the **Variable name** to exactly \`DB\`. Select the D1 database. Configure it for **Production**, and also for **Preview** if testing a preview branch. The correct variable name is essential.
+4. Deploy/redeploy the Pages project. Tables and indexes are created automatically by the Pages Functions; **no manual SQL** is needed.
+5. Test on the Cloudflare Pages domain:
+   - \`/api/leaderboard?mode=classic:normal\` must return a JSON object with \`entries\`.
+   - Open the game, inspect the image URL. It should start with \`/api/frame/\`, and contain **no** episode code.
+   - Make a wrong guess and verify the answer is shown *only after* the guess.
+   - Complete a game and check that Top 3 submissions work with a nickname.
 
-### Leaderboard rules
+If you are using a custom URL such as \`/community-guesser/\`, verify that the **page and the \`/api/*\` endpoints are served by the same Cloudflare Pages deployment/origin**. A GitHub Pages site with only Cloudflare DNS is not enough.
 
-- Classic Easy: at least **15** correct in a streak.
-- Classic Normal, Hard, Impossible: at least **10** correct in a streak.
-- Other challenges: minimum **1** (a solved Community-le scores `7 - guesses`).
-- Each game mode has its own separate top three. Season Challenge is separated by season; Custom Game is separated by selected seasons and lives.
-- Daily Challenge and Community-le have **date-scoped** leaderboards.
-- On completion, if a score qualifies for the top three, the visitor can enter a 2–20 character nickname. Only after submitting their nickname will the top three be revealed. Names and scores are public.
-- Results from two equally scoring players are ranked by submission order; to enter a full leaderboard a new score must strictly beat the third score.
-- For privacy, no account or email address is requested.
+## Architecture
 
-**Integrity caveat:** The browser reports its score to the server. This prevents casual inconsistencies, but it is **not anti-cheat**. Real verified competition would require authenticated users and server-verified challenge state. For small community play this is a lightweight starting point.
+- The browser receives a randomly generated image token and never receives the solution to an unanswered round.
+- D1 stores a server-verified game session, each attempt, the current hidden episode, and the leaderboard.
+- \`/api/frame/{session}/{token}\` streams the screenshot from the existing free GitHub Pages image repositories **without revealing the original episode-bearing URL to the visitor**.
+- The server chooses and checks images for all challenge modes. Daily Challenge and Community-le share the same puzzle on the same Berlin date (06:00 reset).
+- \`/api/leaderboard\` reads only the **verified** \`cg_leaderboard\` entries. Old, unverifiable records in the former \`leaderboard\` table are intentionally not imported.
+- \`_routes.json\` invokes the Pages Functions only for \`/api/*\`, keeping normal HTML, CSS, and JavaScript requests outside the Functions quota.
+- GitHub repository history still contains the old frame/episode catalogue. Like any image-guessing game, screenshot matching cannot be prevented; this protection removes direct inspection of the episode ID and simple client-side score spoofing.
+- No encryption key, passwords, user registration or R2 storage are required.
 
-### Quick test
-
-After binding the database and redeploying, open `/api/leaderboard?mode=classic:normal` on the deployed origin. It should return `{"entries":[],"minimum":10}` before any submissions.
+If the API returns HTTP 503 saying the database is not configured, check the D1 **DB** binding for the relevant Preview or Production environment and redeploy.
