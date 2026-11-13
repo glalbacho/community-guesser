@@ -1387,7 +1387,7 @@
     return (currentRound?.timelineSolution || []).map(entry=>entry.token);
   }
   function timelineCanReorder() {
-    return challenge==="timeline" && !gameOver && !timelineRevealed;
+    return challenge==="timeline" && !gameOver && !timelineRevealed && !remoteBusy;
   }
   function timelineAnimationDuration() {
     // Follow OS reduced-motion preference without changing the saved choice.
@@ -1696,92 +1696,102 @@
     feedback.textContent = message;
     updateProgress();
   }
-  function answer(value, correction = "") {
-    if (refreshDailyAtBoundary()) return;
-    if (gameOver || awaitingNext || !currentRound) return;
-    if (challenge === "communityle") {
-      if (typeof value !== "string" || !byId[value]) return;
-      if (communityleHistory.includes(value)) {
-        feedback.textContent = "You already guessed that episode.";
-        return;
-      }
-      communityleHistory.push(value);
-      saveCommunityle();
-      renderCommunityle();
-      input.value = "";
-      selected = null;
-      closeSuggestions();
-      if (communityleDone()) {
-        finishCommunityle();
-        return;
-      }
-      displayFrame();
-      const hints=communityleHint(value);
-      const summary=(hints[0]==="correct"?"Season correct. ":
-        hints[0]==="present"?"Season number belongs in the episode position. ":
-        "Season number absent. ")+
-        (hints[1]==="correct"?"Episode number correct. ":
-          hints[1]==="present"?"Episode number belongs in the season position. ":
-          "Episode number absent. ");
-      feedback.textContent=summary+"The picture is clearer now.";
-      if (autoFocusInput) input.focus();
-      return;
-    }
-    const correct = challenge === "timeline" ? value === true : value === currentRound.id;
-    answered++;
-    if (challenge === "daily") {
-      dailyAnswers.push(correct);
-      dailyGuesses.push(typeof value === "string" ? value : null);
-      saveDaily();
-      if (correct) { score++; setHigh(); }
-      scoreEl.textContent = String(score);
-      if (answered >= 5) { finishDaily(); return; }
-      const last = currentRound.id;
-      if (!correct) {
-        pauseAfterWrongAnswer("Wrong! Correct answer: " + label(byId[last]) + ".");
-      } else {
-        createRound();
-        feedback.textContent = "Correct! Next screenshot.";
-      }
-      return;
-    }
-    if (correct) {
-      score += revealEnabled() ? (6 - revealStage) : 1;
-      scoreEl.textContent = String(score);
-      setHigh();
-      if (challenge === "timeline") {
-        revealTimelineInPlace(true);
-        timelineSubmit.hidden=false;
-        timelineSubmit.textContent="Next timeline →";
-        feedback.textContent="Correct! Score: "+score+". Review the order before continuing.";
-        return;
-      }
-      if (challenge === "one110" && answered >= playable.length) {
-        finishGame("Perfect! You recognized all " + playable.length + " episodes.");
-        return;
-      }
-      if (customHas("once") && answered >= episodePool().length) {
-        finishGame("Challenge complete! All " + episodePool().length + " selected episodes played.");
-        return;
-      }
-      advance();
-      feedback.textContent = "Correct! Score: " + score;
-      if (autoFocusInput && !gameOver && !textAnswer.hidden) input.focus();
-      return;
-    }
-    if (challenge === "custom") {
-      lives--;
-      if (lives > 0) {
-        pauseAfterWrongAnswer("Wrong! Correct answer: " + label(byId[currentRound.id]) +
-          ". " + lives + " " + (lives === 1 ? "life" : "lives") + " left.");
+  async function answer(value, correction = "") {
+    if(refreshDailyAtBoundary())return;
+    if(gameOver||awaitingNext||!currentRound||remoteBusy||!sessionId)return;
+    if(challenge==="communityle"){
+      if(typeof value!=="string"||!byId[value])return;
+      if(communityleHistory.includes(value)){
+        feedback.textContent="You already guessed that episode.";
         return;
       }
     }
-    // Keep the final streak visible on Game over. resetGame() clears it only
-    // when the player actually chooses Play again.
-    let explanation = correction || (challenge === "timeline" ? "" : "Correct answer: " + label(byId[currentRound.id]));
-    finishGame("Game over! " + explanation + " · Final score: " + score + ".", score);
+    const version=epoch;
+    remoteBusy=true;button.disabled=true;timelineSubmit.disabled=true;
+    fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
+    try{
+      const guess=challenge==="timeline"?timelineOrder.slice():value;
+      const result=await requestGame("guess",{guess});
+      if(version!==epoch)return;
+      score=result.score;answered=result.answered;lives=result.lives;
+      scoreEl.textContent=String(score);setHigh();
+      currentRound.id=result.answer||null;
+      if(challenge==="timeline"){
+        currentRound.timelineSolution=result.timelineSolution||[];
+        currentRound.timelineAnswerLabels=Object.fromEntries(
+          (result.timelineSolution||[]).map(item=>[item.token,item.episode]));
+      }
+      button.disabled=false;timelineSubmit.disabled=false;
+      if(challenge==="communityle"){
+        communityleHistory=(result.guesses||[]).map(g=>g.id);
+        communityleHints=Object.fromEntries((result.guesses||[]).map(g=>[g.id,g.hints]));
+        communityleCompleted=result.finished;
+        if(result.finished)communityleSolution.id=result.answer;
+        renderCommunityle();
+        input.value="";selected=null;closeSuggestions();
+        if(result.finished){finishCommunityle();return;}
+        displayFrame();
+        const hints=communityleHint(value);
+        const summary=(hints[0]==="correct"?"Season correct. ":
+          hints[0]==="present"?"Season number belongs in the episode position. ":
+          "Season number absent. ")+
+          (hints[1]==="correct"?"Episode number correct. ":
+            hints[1]==="present"?"Episode number belongs in the season position. ":
+            "Episode number absent. ");
+        feedback.textContent=summary+"The picture is clearer now.";
+        if(autoFocusInput)input.focus();
+        return;
+      }
+      if(challenge==="daily"){
+        dailyPlan=(result.history||[]).map(h=>({id:h.id,url:h.url}));
+        dailyAnswers=(result.history||[]).map(h=>h.correct);
+        dailyGuesses=(result.history||[]).map(h=>h.guess);
+        if(result.finished){finishDaily();return;}
+        if(!result.correct)pauseAfterWrongAnswer(
+          "Wrong! Correct answer: "+label(byId[result.answer])+".");
+        else{
+          createRound();
+          feedback.textContent="Correct! Next screenshot.";
+        }
+        return;
+      }
+      if(result.correct){
+        if(challenge==="timeline"){
+          revealTimelineInPlace(true);
+          timelineSubmit.hidden=false;
+          timelineSubmit.textContent="Next timeline →";
+          feedback.textContent="Correct! Score: "+score+". Review the order before continuing.";
+          return;
+        }
+        if(result.finished){
+          finishGame(challenge==="one110"?"Perfect! You recognized all 110 episodes.":
+            "Challenge complete! All selected episodes have been played.");
+          return;
+        }
+        advance();
+        feedback.textContent="Correct! Score: "+score;
+        if(autoFocusInput&&!gameOver&&!textAnswer.hidden)input.focus();
+        return;
+      }
+      if(challenge==="custom"&&!result.finished&&lives>0){
+        pauseAfterWrongAnswer("Wrong! Correct answer: "+label(byId[result.answer])+
+          ". "+lives+" "+(lives===1?"life":"lives")+" left.");
+        return;
+      }
+      const explanation=challenge==="timeline"?"The timeline was rearranged into the correct order.":
+        "Correct answer: "+label(byId[result.answer]);
+      finishGame("Game over! "+explanation+" · Final score: "+score+".",score);
+    }catch(error){
+      if(version===epoch){
+        feedback.textContent=error.message;
+        button.disabled=false;timelineSubmit.disabled=false;
+        fourChoices.querySelectorAll("button").forEach(b=>b.disabled=false);
+      }
+    }finally{
+      if(version===epoch)remoteBusy=false;
+    }
   }
+
   function resolveInput() {
     const matches = search(input.value);
     const candidate = selected || (matches.length === 1 ? matches[0] : null);
