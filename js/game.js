@@ -1019,6 +1019,79 @@
       b.setAttribute("aria-current", active ? "page" : "false");
     });
   }
+  function applyServerRound(data) {
+    sessionId=data.session;
+    try { localStorage.setItem(sessionStoreKey(),sessionId); }catch(_){}
+    score=data.score;answered=data.answered;lives=data.lives;
+    scoreEl.textContent=String(score);setHigh();
+    revealStage=data.stage||1;
+    communityleHints=Object.fromEntries((data.guesses||[]).map(g=>[g.id,g.hints]));
+    communityleHistory=(data.guesses||[]).map(g=>g.id);
+    communityleCompleted=challenge==="communityle"&&data.finished;
+    dailyAnswers=(data.history||[]).map(h=>h.correct);
+    dailyGuesses=(data.history||[]).map(h=>h.guess);
+    dailyPlan=(data.history||[]).map(h=>({id:h.id,url:h.url}));
+    awaitingNext=false;gameOver=false;showUnmodifiedAnswer=false;
+    if(!data.round) {
+      currentRound=null;
+      if(data.finished)finishGame("Challenge complete! Final score: "+score+".");
+      return;
+    }
+    if(challenge==="timeline"){
+      const images=data.round.timeline||[];
+      const tokens=images.map(item=>item.token);
+      currentRound={id:null,timeline:tokens,
+        timelineImages:Object.fromEntries(images.map(item=>[item.token,item.url])),
+        timelineSolution:data.timelineSolution||null,
+        timelineAnswerLabels:Object.fromEntries((data.timelineSolution||[]).map(item=>[item.token,item.episode]))};
+      timelineOrder=randomShuffle(tokens.slice());
+      renderTimeline();
+    }else{
+      currentRound={id:data.revealedEpisode||null,
+        frames:data.round.images.map(url=>createFrame(url)),
+        choices:data.round.choices||[]};
+      if(fourEnabled())buildChoices();
+      displayFrame();
+    }
+    if(challenge==="communityle"){
+      communityleSolution={id:data.revealedEpisode||null,url:data.round.images[0]};
+      renderCommunityle();
+    }
+    updateProgress();
+    if(data.finished) {
+      if(challenge==="daily")finishDaily();
+      else if(challenge==="communityle")finishCommunityle();
+      else finishGame("Game over! Final score: "+score+".");
+    }else if(data.awaitingNext) {
+      const last=(data.history||[]).at(-1);
+      if(last && !last.correct){
+        currentRound.id=data.revealedEpisode;
+        pauseAfterWrongAnswer("Wrong! Correct answer: "+label(byId[data.revealedEpisode])+".");
+      }else{
+        // If the page was reloaded between a correct guess and the next round,
+        // finish advancing the already-verified server session.
+        Promise.resolve().then(()=>createRound());
+      }
+    }
+  }
+  async function loadServerRound(action,extra={}) {
+    const version=epoch;
+    remoteBusy=true;input.disabled=true;button.disabled=true;
+    timelineSubmit.disabled=true;
+    fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
+    feedback.textContent="Loading screenshot…";
+    try{
+      const response=await requestGame(action,extra);
+      if(version!==epoch)return;
+      feedback.textContent="";
+      input.disabled=false;button.disabled=false;timelineSubmit.disabled=false;
+      applyServerRound(response);
+    }catch(error){
+      if(version===epoch)showServerFailure(error);
+    }finally{
+      if(version===epoch)remoteBusy=false;
+    }
+  }
   function resetGame() {
     closeCommunityleResult();
     communityleShowResult.hidden=true;
@@ -1033,57 +1106,50 @@
     });
     timelineMotionAnimations=[];
     timelineBoard.classList.remove("reordering","solved","incorrect");
-    clearBoard();
-    clearAnswerReveal();
-    fullEpisodeListOpened = false;
-    inputWasFocusedOnPointerDown = false;
+    clearBoard();clearAnswerReveal();
+    fullEpisodeListOpened=false;
+    inputWasFocusedOnPointerDown=false;
     ++epoch;
-    currentRound = null;
-    pending = [];
-    previousId = "";
-    score = 0; answered = 0; lives = challenge === "custom" ? customLives : 3; gameOver = false;
-    awaitingNext = false; showUnmodifiedAnswer = false;
-    selected = null; highlighted = -1; visible = [];
-    currentFrame = 0; revealStage = 1; timelineSelection = -1;
-    input.value = ""; input.disabled = false; button.disabled = false;
-    button.textContent = "Guess"; button.hidden = false;
+    currentRound=null;sessionId=null;remoteBusy=false;
+    pending=[];previousId="";
+    score=0;answered=0;lives=challenge==="custom"?customLives:1;gameOver=false;
+    awaitingNext=false;showUnmodifiedAnswer=false;
+    selected=null;highlighted=-1;visible=[];
+    currentFrame=0;revealStage=1;timelineSelection=-1;
+    input.value="";input.disabled=false;button.disabled=false;
+    button.textContent="Guess";button.hidden=false;
     textAnswer.classList.remove("replay-only");
-    feedback.classList.remove("is-wrong","is-correct");
-    feedback.textContent = "";
+    feedback.classList.remove("is-wrong","is-correct");feedback.textContent="";
     closeSuggestions();
-    scoreEl.textContent = "0";
-    high = loadHigh(); highEl.textContent = String(high);
+    scoreEl.textContent="0";
+    high=loadHigh();highEl.textContent=String(high);
     updateShell();
-    if (challenge === "communityle" || challenge === "daily") loadedDailyDate=dailyDate();
-    else loadedDailyDate=null;
-    if (challenge === "communityle") {
-      communityleSolution = communityleSchedule();
-      if (!communityleSolution) { finishGame("No episode images available."); return; }
-      communityleHistory = readCommunityle(communityleSolution);
-      currentRound = {id: communityleSolution.id, frames: [createFrame(communityleSolution.url)]};
-      renderCommunityle();
-      displayFrame();
-      if (communityleDone()) finishCommunityle();
+    loadedDailyDate=(challenge==="daily"||challenge==="communityle")?dailyDate():null;
+    communityleHints={};communityleHistory=[];communityleCompleted=false;
+    communityleSolution=null;dailyPlan=[];dailyAnswers=[];dailyGuesses=[];
+    if(challenge==="custom"&&!customStarted){
+      progressDetail.textContent="";
       return;
     }
-    if (challenge === "custom" && !customStarted) {
-      progressDetail.textContent = "";
-      return;
-    }
-    if (challenge === "daily") {
-      dailyPlan = dailySchedule();
-      dailyAnswers = readDaily();
-      dailyGuesses = readDailyGuesses();
-      answered = dailyAnswers.length;
-      score = dailyAnswers.filter(Boolean).length;
-      scoreEl.textContent = String(score);
-      if (answered >= dailyPlan.length) {
-        finishDaily();
-        return;
-      }
-    }
-    createRound();
+    const useResume=!hasBooted||challenge==="daily"||challenge==="communityle";
+    hasBooted=true;
+    let resume=null;
+    if(useResume)try{resume=localStorage.getItem(sessionStoreKey());}catch(_){}
+    loadServerRound("start",{settings:gameSettings(),resume});
   }
+  function createRound() {
+    if(gameOver||remoteBusy)return;
+    currentFrame=0;revealStage=1;selected=null;
+    awaitingNext=false;showUnmodifiedAnswer=false;
+    input.value="";input.disabled=false;button.disabled=false;
+    button.hidden=false;button.textContent="Guess";
+    textAnswer.classList.remove("replay-only");
+    if(fourEnabled()){fourChoices.hidden=false;textAnswer.hidden=true;}
+    else if(challenge!=="timeline"){fourChoices.hidden=true;textAnswer.hidden=false;}
+    closeSuggestions();feedback.textContent="";
+    loadServerRound("next");
+  }
+
   function activate(name) {
     if (!challengeNames[name]) return;
     challenge = name;
@@ -1116,34 +1182,6 @@
     if (challenge === "custom") return playable.filter(ep => customSeasons.includes(seasonNumber(ep)));
     return playable;
   }
-  function refillQueue() {
-    const eligible = episodePool().map(ep => ep.id);
-    pending = randomShuffle(eligible);
-    if (pending.length > 1 && pending[pending.length - 1] === previousId) {
-      [pending[0], pending[pending.length - 1]] = [pending[pending.length - 1], pending[0]];
-    }
-  }
-  function nextId() {
-    if (!pending.length) {
-      if ((challenge === "one110" || customHas("once")) && answered > 0) return null;
-      refillQueue();
-    }
-    const id = pending.pop();
-    previousId = id;
-    return id;
-  }
-  function imageUrlsFor(id) {
-    const urls = imagePool[id];
-    if (!urls || !urls.length) return [];
-    if (threeEnabled() && urls.length >= 3) {
-      return [0, 1, 2].map(part => {
-        const start = Math.floor(part * urls.length / 3);
-        const end = Math.floor((part + 1) * urls.length / 3);
-        return urls[start + Math.floor(Math.random() * (end - start))];
-      });
-    }
-    return [urls[Math.floor(Math.random() * urls.length)]];
-  }
   function createFrame(url, displayEpoch) {
     const img = new Image();
     img.alt = "Screenshot from a Community episode";
@@ -1175,63 +1213,6 @@
       img.src = url;
     });
     return frame;
-  }
-  function createRound() {
-    if (gameOver) return;
-    currentFrame = 0; revealStage = 1; selected = null;
-    timelineSelection = -1; awaitingNext = false; showUnmodifiedAnswer = false;
-    input.value = ""; input.disabled = false; button.disabled = false; button.hidden = false; button.textContent = "Guess";
-    textAnswer.classList.remove("replay-only");
-    if (fourEnabled()) { fourChoices.hidden = false; textAnswer.hidden = true; }
-    else if (challenge !== "timeline") { fourChoices.hidden = true; textAnswer.hidden = false; }
-    closeSuggestions();
-    // Only a list explicitly opened by the player persists across rounds.
-    // Simply focusing the input or typing a search never enables this.
-    if (fullEpisodeListOpened && showOnFocus && !fourEnabled() &&
-        challenge !== "timeline" && !gameOver) renderSuggestions();
-    feedback.textContent = "";
-    if (challenge === "timeline") {
-      // Choose three distinct episodes, including when a normal queue would
-      // cross a cycle boundary.
-      const picked = randomShuffle(episodePool().map(ep => ep.id)).slice(0, 3);
-      if (picked.length < 3) { finishGame("Not enough episodes to play."); return; }
-      currentRound = { id:picked[0], timeline:picked };
-      // Explicitly allow an already-correct sequence about 10% of the time.
-      const chronological = picked.slice().sort((a,b) =>
-        episodes.findIndex(ep=>ep.id===a)-episodes.findIndex(ep=>ep.id===b));
-      if (Math.random() < 0.10) {
-        timelineOrder = chronological;
-      } else {
-        timelineOrder = randomShuffle(picked.slice());
-        // The remaining 90% should actually require reordering.
-        if (timelineOrder.every((id,i)=>id===chronological[i])) {
-          [timelineOrder[0],timelineOrder[1]]=[timelineOrder[1],timelineOrder[0]];
-        }
-      }
-      renderTimeline();
-      updateProgress();
-      return;
-    }
-    let id, urls;
-    if (challenge === "daily") {
-      const step = dailyPlan[answered];
-      if (!step) { finishDaily(); return; }
-      id = step.id; urls = [step.url];
-    } else {
-      id = nextId();
-      if (!id) {
-        finishGame(challenge === "custom"
-          ? "Challenge complete! All selected episodes have been played."
-          : "All 110 episodes completed! A perfect run.");
-        return;
-      }
-      urls = imageUrlsFor(id);
-    }
-    const displayEpoch = epoch;
-    currentRound = { id, frames:urls.map(url => createFrame(url, displayEpoch)) };
-    if (fourEnabled()) buildChoices();
-    updateProgress();
-    displayFrame();
   }
   function updateProgress() {
     let message = "";
