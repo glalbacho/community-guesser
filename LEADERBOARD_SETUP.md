@@ -1,10 +1,10 @@
 # Community Guesser — Cloudflare Pages deployment
 
-The protected screenshot game and verified Top 3 high scores require **Cloudflare Pages Functions and D1**. This project cannot run the secure game on GitHub Pages alone: GitHub Pages does not execute \`/functions\`.
+The protected screenshot game and verified Top 3 high scores require **Cloudflare Pages Functions and D1**. The **Build output directory must be \`dist\`**, never \`.\`, or server-only files could become public assets. This project cannot run the secure game on GitHub Pages alone: GitHub Pages does not execute \`/functions\`.
 
 ## Cloudflare setup (no paid services required at modest traffic)
 
-1. Open Cloudflare Dashboard → **Workers & Pages** and select the Pages project connected to **glalbacho/community-guesser**. Make sure the Git deployment serves the root directory containing \`index.html\` and the repository's \`functions/\` directory.
+1. Open Cloudflare Dashboard → **Workers & Pages** and select the Pages project connected to **glalbacho/community-guesser**. Set **Build command** to \`npm run build\` and **Build output directory** to \`dist\`. Keep **Root directory** empty / the repository root. The Cloudflare Pages \`functions/\` folder remains in the repository root (outside \`dist\`).
 2. Under **D1 SQL Database**, create a free database, e.g. \`community-guesser-db\`, unless you already have a D1 database for the project.
 3. In the Pages project, open **Settings → Bindings → Add → D1 database bindings**. Set the **Variable name** to exactly \`DB\`. Select the D1 database. Configure it for **Production**, and also for **Preview** if testing a preview branch. The correct variable name is essential.
 4. Deploy/redeploy the Pages project. Tables and indexes are created automatically by the Pages Functions; **no manual SQL** is needed.
@@ -28,3 +28,13 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 - No encryption key, passwords, user registration or R2 storage are required.
 
 If the API returns HTTP 503 saying the database is not configured, check the D1 **DB** binding for the relevant Preview or Production environment and redeploy.
+
+## Safe build configuration
+
+In **Settings → Build → Build configuration**, click the pencil icon and set:
+
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Root directory: empty (repository root)
+
+The build script includes only `index.html`, `assets/`, `css/`, `js/episodes.js`, `js/game.js`, and `_routes.json` in `dist`. Neither `src/server` nor the `functions` source are public static files. Run `npm run build` locally to verify before deployment.
