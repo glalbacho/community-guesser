@@ -143,13 +143,24 @@
           <button type="button" id="leaderboard-reopen" class="leaderboard-reopen" hidden>🏆 Claim your Top 3 spot</button>
           <ol id="leaderboard-list" class="leaderboard-list" hidden></ol>
         </section>
+      <section id="one110-hall" class="one110-hall" aria-label="One Life 110 completions" hidden>
+        <div class="one110-hall-heading">
+          <span class="one110-hall-trophy" aria-hidden="true">🏆</span>
+          <div><div class="one110-hall-eyebrow">THE 110 CLUB</div><h2>Completed all 110 episodes</h2></div>
+        </div>
+        <p class="one110-hall-description">Every name here represents a perfect run with one life. No rankings, no Top 3 limit. Finish all 110 to join.</p>
+        <p id="one110-hall-status" class="one110-hall-status" role="status" aria-live="polite"></p>
+        <button type="button" id="one110-claim" class="one110-claim" hidden>🏅 Add your name to the 110 Club</button>
+        <ul id="one110-hall-list" class="one110-hall-list"></ul>
+        <button type="button" id="one110-hall-more" class="one110-hall-more" hidden>Show more finishers</button>
+      </section>
     </main>
     <div id="leaderboard-modal" class="leaderboard-modal" hidden>
       <div class="leaderboard-modal-backdrop" id="leaderboard-modal-backdrop"></div>
       <section class="leaderboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="leaderboard-modal-title" aria-describedby="leaderboard-modal-description" tabindex="-1">
         <button type="button" id="leaderboard-modal-close" class="leaderboard-modal-close" aria-label="Close Top 3 nickname dialog">×</button>
         <div class="leaderboard-modal-medal" aria-hidden="true">🏆</div>
-        <div class="leaderboard-modal-eyebrow">NEW HIGH SCORE</div>
+        <div class="leaderboard-modal-eyebrow" id="leaderboard-modal-eyebrow">NEW HIGH SCORE</div>
         <h2 id="leaderboard-modal-title">You made the Top 3!</h2>
         <p id="leaderboard-modal-description">Choose a nickname to appear on the website leaderboard.</p>
         <p id="leaderboard-modal-score" class="leaderboard-modal-score"></p>
