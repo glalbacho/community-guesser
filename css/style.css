@@ -324,3 +324,37 @@ button,select,input{font-family:inherit}
 .leaderboard-modal-later{background:transparent;color:#c9d4e5;display:block;margin:8px auto 0;border:0;text-decoration:underline;text-underline-offset:4px;font-size:13px;cursor:pointer;padding:8px 13px}
 @media(max-width:480px){.leaderboard-modal-dialog{padding:27px 18px 20px;border-radius:16px}}
 @media(prefers-reduced-motion:reduce){.leaderboard-modal-dialog{animation:none}}
+
+
+/* Daily Challenge: a five-round quiz scorecard, deliberately NOT a Wordle grid. */
+.daily-result-action{text-align:center;margin:18px auto 14px;max-width:560px}
+.daily-result-action[hidden],.daily-result-modal[hidden]{display:none!important}
+.daily-result-open{background:linear-gradient(110deg,#365983,#426fa3);border:1px solid #89afdd;border-radius:12px;color:#f5f8fd;padding:13px 21px;font:inherit;font-size:15px;font-weight:760;cursor:pointer;box-shadow:0 8px 25px #0003;min-height:46px}
+.daily-result-action p{color:#b7c4d8;font-size:12px;margin:8px 0 0}
+.daily-result-modal{position:fixed;inset:0;z-index:115;display:grid;place-items:center;padding:18px}
+.daily-result-backdrop{position:absolute;inset:0;background:rgba(5,10,19,.85);backdrop-filter:blur(7px)}
+.daily-result-dialog{position:relative;width:min(100%,505px);max-height:calc(100dvh - 38px);overflow-y:auto;scrollbar-width:thin;background:linear-gradient(150deg,#2e415e,#1f2b3b 54%,#1c2432);color:#f5f8ff;border:1px solid #819bc4;border-radius:21px;box-shadow:0 30px 90px #0009;padding:29px 25px 22px;text-align:center;animation:daily-result-enter .2s ease-out}
+@keyframes daily-result-enter{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.daily-result-close{position:absolute;top:9px;right:12px;border:0;background:none;color:#d7e0ee;font-size:28px;padding:6px 10px;cursor:pointer}
+.daily-result-eyebrow{font-size:11px;color:#a4c6f8;letter-spacing:.17em;font-weight:800}
+.daily-result-symbol{font-size:37px;margin:13px 0 5px}
+.daily-result-dialog h2{font-size:clamp(23px,5vw,29px);margin:3px 0 8px;line-height:1.2}
+#daily-result-description{font-size:13px;line-height:1.5;color:#c1d0e5;margin:4px auto 12px;max-width:330px}
+.daily-result-score{font-size:clamp(32px,7vw,43px);line-height:1.2;font-weight:850;color:#fae1a2;margin:8px auto 3px;font-variant-numeric:tabular-nums}
+.daily-result-date{font-size:12px;color:#c5d3e7;margin:0 0 18px}
+.daily-rounds-title{font-size:11px;text-transform:uppercase;letter-spacing:.11em;font-weight:800;color:#a5bddf;margin:3px 0 8px}
+.daily-result-rounds{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:7px}
+.daily-result-rounds li{border:1px solid #50647e;background:#26374b;border-radius:10px;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:650}
+.daily-result-rounds .daily-round-number{color:#d7e2f5;letter-spacing:.02em}
+.daily-result-rounds .daily-round-outcome{display:flex;align-items:center;gap:7px}
+.daily-result-rounds .daily-round-outcome span{font-size:18px;line-height:1}
+.daily-result-rounds li.won{border-color:#4c9c78;background:#244338;color:#dcffea}
+.daily-result-rounds li.missed{border-color:#965d66;background:#443139;color:#ffe2e3}
+.daily-result-invite{color:#c4d1e4;font-size:12px;line-height:1.55;margin:17px 0 14px}
+.daily-result-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.daily-result-actions button{min-height:44px;padding:10px;border-radius:10px;border:1px solid #819cbe;background:#3b5e8e;color:#fff;font-size:14px;font-weight:750;cursor:pointer}
+.daily-result-actions button:hover,.daily-result-open:hover{filter:brightness(1.12)}
+.daily-result-actions button:last-child{background:#344459}
+.daily-result-status{min-height:17px;color:#b7e2c2;font-size:12px;margin:11px 0 0}
+@media(max-width:420px){.daily-result-dialog{padding:25px 16px 18px;border-radius:15px}.daily-result-actions{gap:7px}.daily-result-actions button{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.daily-result-dialog{animation:none}}

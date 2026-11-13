@@ -6,8 +6,7 @@ const allowedMode=mode=>typeof mode==="string"&&(
   /^classic:(easy|normal|hard|impossible)$/.test(mode)||
   /^season:[1-6]$/.test(mode)||
   /^challenge:(four|timeline|progressive|one110)$/.test(mode)||
-  /^custom:(10|[1-9]):[1-6](?:-[1-6]){0,5}:[01]{6}$/.test(mode)||
-  /^(daily|communityle):\d{4}-\d{2}-\d{2}$/.test(mode)
+  /^custom:(10|[1-9]):[1-6](?:-[1-6]){0,5}:[01]{6}$/.test(mode)
 );
 async function setup(db){
   await db.prepare("CREATE TABLE IF NOT EXISTS cg_leaderboard (id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT NOT NULL, name TEXT NOT NULL, score INTEGER NOT NULL, created_at INTEGER NOT NULL)").run();
@@ -61,8 +60,6 @@ export async function onRequest({request,env}){
     if(session.submitted)return json({error:"This result has already been submitted."},409);
     const score=session.state.score;
     if(!Number.isInteger(score)||score<1||score>100000||
-      /^daily:/.test(input.mode)&&score>5||
-      /^communityle:/.test(input.mode)&&score>6||
       input.mode==="challenge:one110"&&score>110)
       return json({error:"At least 1 verified point is required."},400);
     const before=await getBoard(env.DB,input.mode);

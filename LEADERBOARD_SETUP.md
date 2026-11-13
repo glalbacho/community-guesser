@@ -28,7 +28,7 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 - The browser receives a randomly generated image token and never receives the solution to an unanswered round.
 - D1 stores a server-verified game session, each attempt, the current hidden episode, and the leaderboard.
 - \`/api/frame/{session}/{token}\` streams the screenshot from the existing free GitHub Pages image repositories **without revealing the original episode-bearing URL to the visitor**.
-- The server chooses and checks images for all challenge modes. Daily Challenge and Community-le share the same puzzle on the same Berlin date (06:00 reset).
+- The server chooses and checks images for all challenge modes. Daily Challenge and Community-le use their own daily puzzles that reset at 06:00 Berlin time.
 - \`/api/leaderboard\` reads only the **verified** \`cg_leaderboard\` entries. Old, unverifiable records in the former \`leaderboard\` table are intentionally not imported.
 - \`_routes.json\` invokes the Pages Functions only for \`/api/*\`, keeping normal HTML, CSS, and JavaScript requests outside the Functions quota.
 - GitHub repository history still contains the old frame/episode catalogue. Like any image-guessing game, screenshot matching cannot be prevented; this protection removes direct inspection of the episode ID and simple client-side score spoofing.
@@ -44,7 +44,7 @@ In **Settings → Build → Build configuration**, click the pencil icon and set
 - Build output directory: `dist`
 - Root directory: empty (repository root)
 
-The build script includes only `index.html`, `assets/`, `css/`, `js/episodes.js`, `js/game.js`, and `_routes.json` in `dist`. Neither `src/server` nor the `functions` source are public static files. Run `npm run build` locally to verify before deployment.
+The build script includes only `index.html`, `assets/`, `css/`, `js/episodes.js`, `js/daily-share.js`, `js/game.js`, and `_routes.json` in `dist`. Neither `src/server` nor the `functions` source are public static files. Run `npm run build` locally to verify before deployment.
 
 ## Usability and abuse protections
 
@@ -53,3 +53,7 @@ The build script includes only `index.html`, `assets/`, `css/`, `js/episodes.js`
 - Correct guesses normally advance and select the next screenshot in one authenticated API request, avoiding a second round-trip.
 - D1 maintains sliding time-window style fixed buckets with hashed client IP + time period. Limits: 600 game API requests per five minutes, 80 starts per five minutes, 12 high-score submissions and 240 leaderboard reads per five minutes. The API returns 429 with Retry-After on excess. These limits are a low-cost abuse deterrent, not a replacement for Cloudflare edge/WAF protection; very large distributed floods may still exhaust quotas.
 - The image proxy remains unrestricted to avoid extra D1 round trips for image loading; randomly generated session and frame tokens make unguided guessing impractical.
+
+## Sharing daily results
+
+Daily Challenge is a five-round quiz, not a Wordle puzzle. Its share dialog displays a separate numbered outcome (correct/missed) for each of the five episode screenshots, the overall score out of five, the puzzle date, and Share / Copy buttons. The copied text contains **no episode IDs, titles or images**, only the five binary outcomes, score, date and link to `#/daily`. The dialog automatically appears once per completed session and can always be reopened via its dedicated button. Community-le retains its existing two-number hint share format. Neither daily mode has a public Top 3.

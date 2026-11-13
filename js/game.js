@@ -20,6 +20,13 @@
   const textAnswer = $("text-answer"), fourChoices = $("four-choices");
   const communityleBoard = $("communityle-board"), communityleDate = $("communityle-date");
   const communityleAttempts = $("communityle-attempts"), communityleGuesses = $("communityle-guesses");
+  const dailyResultModal=$("daily-result-modal"),dailyResultAction=$("daily-result-action");
+  const dailyShowResult=$("daily-show-result"),dailyResultClose=$("daily-result-close");
+  const dailyResultBackdrop=$("daily-result-backdrop"),dailyResultScore=$("daily-result-score");
+  const dailyResultDate=$("daily-result-date"),dailyResultRounds=$("daily-result-rounds");
+  const dailyResultStatus=$("daily-result-status"),dailyResultShare=$("daily-result-share");
+  const dailyResultCopy=$("daily-result-copy");
+  let dailyResultPreviousFocus=null;
   const communityleResultModal = $("communityle-result-modal");
   const communityleShowResult = $("communityle-show-result");
   const communityleResultClose = $("communityle-result-close");
@@ -508,6 +515,95 @@
       communityleGuesses.appendChild(row);
     }
   }
+  function dailyShareUrl(){
+    const base=window.location?.origin&&window.location?.pathname
+      ? window.location.origin+window.location.pathname
+      : "https://community-guesser.pages.dev/";
+    return base+"#/daily";
+  }
+  function dailyShareText(){
+    return window.COMMUNITY_DAILY_SHARE(loadedDailyDate||dailyDate(),dailyAnswers,dailyShareUrl());
+  }
+  function closeDailyResult(){
+    if(dailyResultModal.hidden)return;
+    dailyResultModal.hidden=true;
+    if(dailyResultPreviousFocus?.isConnected&&!dailyResultPreviousFocus.disabled
+      &&!dailyResultPreviousFocus.hidden)dailyResultPreviousFocus.focus();
+    dailyResultPreviousFocus=null;
+  }
+  function openDailyResult(){
+    if(challenge!=="daily"||!gameOver||dailyAnswers.length!==5)return;
+    dailyResultScore.textContent=dailyAnswers.filter(Boolean).length+" / 5 correct";
+    dailyResultDate.textContent="Daily Challenge · "+(loadedDailyDate||dailyDate());
+    dailyResultRounds.replaceChildren();
+    dailyAnswers.forEach((won,index)=>{
+      const item=document.createElement("li");
+      item.className=won?"won":"missed";
+      const round=document.createElement("span");
+      round.className="daily-round-number";
+      round.textContent="Round "+(index+1);
+      const status=document.createElement("span");
+      status.className="daily-round-outcome";
+      const symbol=document.createElement("span");
+      symbol.textContent=won?"✅":"❌";
+      symbol.setAttribute("aria-hidden","true");
+      status.appendChild(symbol);
+      status.appendChild(document.createTextNode(won?"Correct":"Missed"));
+      item.appendChild(round);
+      item.appendChild(status);
+      item.setAttribute("aria-label","Round "+(index+1)+": "+(won?"correct":"missed"));
+      dailyResultRounds.appendChild(item);
+    });
+    dailyResultStatus.textContent="";
+    dailyResultPreviousFocus=document.activeElement;
+    dailyResultModal.hidden=false;
+    dailyResultClose.focus();
+  }
+  async function copyDailyResult(){
+    const content=dailyShareText();
+    try{
+      if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(content);
+      else{
+        const field=document.createElement("textarea");
+        field.value=content;field.setAttribute("readonly","");
+        field.style.position="fixed";field.style.opacity="0";
+        document.body.appendChild(field);
+        try{
+          field.select();
+          if(!document.execCommand||!document.execCommand("copy"))
+            throw new Error("Clipboard not available");
+        }finally{field.remove();}
+      }
+      dailyResultStatus.textContent="Result copied! Paste it anywhere.";
+    }catch(_){
+      dailyResultStatus.textContent="Could not copy. Try Share result instead.";
+    }
+  }
+  dailyShowResult.addEventListener("click",openDailyResult);
+  dailyResultClose.addEventListener("click",closeDailyResult);
+  dailyResultBackdrop.addEventListener("click",closeDailyResult);
+  dailyResultCopy.addEventListener("click",copyDailyResult);
+  dailyResultShare.addEventListener("click",async()=>{
+    const content=dailyShareText();
+    if(typeof navigator.share==="function"){
+      try{
+        await navigator.share({text:content});
+        dailyResultStatus.textContent="";
+        return;
+      }catch(error){if(error?.name==="AbortError")return;}
+    }
+    await copyDailyResult();
+  });
+  document.addEventListener("keydown",event=>{
+    if(dailyResultModal.hidden)return;
+    if(event.key==="Escape"){event.preventDefault();closeDailyResult();return;}
+    if(event.key==="Tab"){
+      const items=[dailyResultClose,dailyResultShare,dailyResultCopy];
+      const position=items.indexOf(document.activeElement);
+      if(event.shiftKey&&position<=0){event.preventDefault();items.at(-1).focus();}
+      else if(!event.shiftKey&&position===items.length-1){event.preventDefault();items[0].focus();}
+    }
+  });
   function communityleShareUrl() {
     // Use the exact hosted base path (Cloudflare Pages or a custom domain).
     // The existing #/communityle route works after a normal page reload.
@@ -628,7 +724,6 @@
     clearAnswerReveal();
     communityleShowResult.hidden=false;
     openCommunityleResult();
-    checkBoard(won ? 7 - communityleHistory.length : 0);
   }
   function displayLabel(ep) {
     return ((challenge === "classic" && (mode === "hard" || mode === "impossible")) ||
@@ -863,9 +958,7 @@
       ["classic:hard","Hard Mode"],["classic:impossible","Impossible Mode"],
       ...[1,2,3,4,5,6].map(s=>["season:"+s,"Season "+s]),
       ["challenge:one110","One Life, 110"],["challenge:four","Four Choices"],
-      ["challenge:timeline","Timeline Challenge"],["challenge:progressive","Progressive Reveal"],
-      ["daily:"+dailyDate(),"Daily Challenge · Today"],
-      ["communityle:"+dailyDate(),"Community-le · Today"]
+      ["challenge:timeline","Timeline Challenge"],["challenge:progressive","Progressive Reveal"]
     ];
     const key="custom:"+customLives+":"+customSeasons.slice().sort((a,b)=>a-b).join("-")+":"+customFeatureFlags();
     return [...basic,[key,"Custom Game · saved settings"]];
@@ -877,8 +970,6 @@
       const fields=mode.split(":");
       return "Custom Game · "+fields[1]+" lives · Seasons "+fields[2].replaceAll("-",", ");
     }
-    if(mode.startsWith("daily:"))return "Daily Challenge · "+mode.slice(6);
-    if(mode.startsWith("communityle:"))return "Community-le · "+mode.slice(12);
     return mode;
   }
   function showHighscoreCards(boards) {
@@ -888,7 +979,7 @@
       card.className="highscores-card";
       const title=document.createElement("h3"); title.textContent=board.name;
       const caption=document.createElement("p"); caption.className="highscores-card-sub";
-      caption.textContent="Website Top 3 · No minimum score";
+      caption.textContent="Website Top 3 · Minimum 1 point";
       card.appendChild(title);card.appendChild(caption);
       if(!board.entries.length){
         const empty=document.createElement("p");empty.className="hs-empty";
@@ -900,7 +991,7 @@
           const name=document.createElement("span"); name.className="hs-name";
           name.textContent="#"+(i+1)+"  "+entry.name;
           const points=document.createElement("span");points.className="hs-points";
-          points.textContent=board.mode.startsWith("communityle:")?(entry.score===0?"Unsolved":(7-entry.score)+" guesses"):entry.score+" pts";
+          points.textContent=entry.score+" pts";
           li.appendChild(name);li.appendChild(points);list.appendChild(li);
         });
         card.appendChild(list);
@@ -921,7 +1012,7 @@
       const available=new Map(data.boards.map(entry=>[entry.mode,entry.entries]));
       const basic=publicScoreboards();
       const existing=new Set(basic.map(item=>item[0]));
-      const more=data.boards.filter(entry=>!existing.has(entry.mode))
+      const more=data.boards.filter(entry=>!existing.has(entry.mode)&&! /^(daily|communityle):/.test(entry.mode))
         .map(entry=>[entry.mode,publicScoreboardName(entry.mode)]);
       showHighscoreCards([...basic,...more].map(([mode,name])=>({
         mode,name,entries:available.get(mode)||[]
@@ -1117,7 +1208,9 @@
   }
   function resetGame() {
     closeCommunityleResult();
+    closeDailyResult();
     communityleShowResult.hidden=true;
+    dailyResultAction.hidden=true;
     timelineRevealed=false;
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
@@ -1691,7 +1784,14 @@
     progressDetail.textContent = dailyDate() + " (Berlin) · 5 / 5";
     restart.hidden = true;
     showDailyAnswerReveal();
-    checkBoard(score);
+    dailyResultAction.hidden=false;
+    const viewedKey="community-guesser-daily-result-viewed:"+sessionId;
+    let alreadyViewed=false;
+    try{alreadyViewed=localStorage.getItem(viewedKey)==="yes";}catch(_){}
+    if(!alreadyViewed){
+      try{localStorage.setItem(viewedKey,"yes");}catch(_){}
+      openDailyResult();
+    }
   }
   function advance() {
     if (gameOver) return;
