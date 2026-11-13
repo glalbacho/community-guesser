@@ -1,4 +1,4 @@
-import {imagePath,load} from "../../../_shared/engine.js";
+import {imagePath,load} from "../../../../src/server/engine.js";
 
 export async function onRequestGet({params,env}) {
   if(!env.DB)return new Response("Unavailable",{status:503});
