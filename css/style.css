@@ -298,3 +298,29 @@ button,select,input{font-family:inherit}
 .communityle-hint-key span{min-width:31px;text-align:center}
 @media(max-width:600px){.communityle-hint-block{width:23px;height:25px;font-size:20px}.communityle-two-hints{gap:4px}.communityle-hint-key{gap:5px}}
 
+
+
+/* Top 3 celebration and nickname entry: mobile-first modal, no buried form. */
+.leaderboard-reopen,.retry-game{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;padding:10px 16px;background:#355781;color:#f6f9ff;border:1px solid #729ad2;font:inherit;font-size:14px;font-weight:750;cursor:pointer;min-height:43px}
+.leaderboard-reopen[hidden],.retry-game[hidden],.leaderboard-modal[hidden]{display:none!important}
+.retry-game{margin:8px auto 14px;background:#37465b}
+.leaderboard-modal{position:fixed;inset:0;z-index:110;display:grid;place-items:center;padding:18px}
+.leaderboard-modal-backdrop{position:absolute;inset:0;background:rgba(5,9,17,.83);backdrop-filter:blur(8px)}
+.leaderboard-modal-dialog{position:relative;width:min(100%,470px);max-height:calc(100dvh - 36px);overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;align-items:stretch;text-align:center;border-radius:23px;border:1px solid #8199c4;background:linear-gradient(150deg,#364a67 0%,#222d40 50%,#1b2231 100%);box-shadow:0 30px 100px #000a,0 0 45px #5679ac33;color:#f7f9ff;padding:30px 28px 24px;animation:leaderboard-modal-enter .22s ease-out}
+@keyframes leaderboard-modal-enter{from{opacity:0;transform:translateY(10px) scale(.975)}to{opacity:1;transform:translateY(0) scale(1)}}
+.leaderboard-modal-close{position:absolute;top:12px;right:13px;border:0;background:transparent;color:#ced9ee;font-size:29px;line-height:1;padding:6px 10px;cursor:pointer}
+.leaderboard-modal-medal{font-size:49px;line-height:1;margin:8px auto 10px;filter:drop-shadow(0 6px 10px #0005)}
+.leaderboard-modal-eyebrow{letter-spacing:.19em;color:#f9d58d;font-size:11px;font-weight:800}
+.leaderboard-modal-dialog h2{margin:8px 0 5px;font-size:clamp(24px,5vw,30px);line-height:1.2}
+#leaderboard-modal-description{font-size:13px;line-height:1.55;color:#c8d3e5;margin:3px 0 12px}
+.leaderboard-modal-score{display:inline-block;align-self:center;background:#50452d;color:#ffe5a2;border:1px solid #ac965f;border-radius:30px;padding:7px 19px;font-size:18px;font-weight:800;margin:0 0 10px;font-variant-numeric:tabular-nums}
+.leaderboard-modal .leaderboard-form{margin:8px 0 0;text-align:left}
+.leaderboard-modal .leaderboard-form label span{color:#bdc7d8;font-weight:400;font-size:12px}
+.leaderboard-modal .leaderboard-entry{display:flex;flex-direction:column;gap:10px}
+.leaderboard-modal .leaderboard-entry input{min-height:48px;font-size:16px;background:#151d2a}
+.leaderboard-modal .leaderboard-entry button{min-height:48px;font-size:16px;background:#3d78b8;border-color:#8fbcee}
+.leaderboard-modal-error{min-height:18px;color:#ffb0b0;font-size:12px;line-height:1.4;margin:8px 0 3px}
+.leaderboard-modal .leaderboard-note{margin:4px 0 8px}
+.leaderboard-modal-later{background:transparent;color:#c9d4e5;display:block;margin:8px auto 0;border:0;text-decoration:underline;text-underline-offset:4px;font-size:13px;cursor:pointer;padding:8px 13px}
+@media(max-width:480px){.leaderboard-modal-dialog{padding:27px 18px 20px;border-radius:16px}}
+@media(prefers-reduced-motion:reduce){.leaderboard-modal-dialog{animation:none}}
