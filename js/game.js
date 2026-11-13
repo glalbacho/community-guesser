@@ -1707,6 +1707,7 @@
       }
     }
     const version=epoch;
+    let startedNextRound=false;
     remoteBusy=true;button.disabled=true;timelineSubmit.disabled=true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     try{
@@ -1752,6 +1753,7 @@
         if(!result.correct)pauseAfterWrongAnswer(
           "Wrong! Correct answer: "+label(byId[result.answer])+".");
         else{
+          startedNextRound=true;
           createRound();
           feedback.textContent="Correct! Next screenshot.";
         }
@@ -1770,6 +1772,7 @@
             "Challenge complete! All selected episodes have been played.");
           return;
         }
+        startedNextRound=true;
         advance();
         feedback.textContent="Correct! Score: "+score;
         if(autoFocusInput&&!gameOver&&!textAnswer.hidden)input.focus();
@@ -1790,7 +1793,7 @@
         fourChoices.querySelectorAll("button").forEach(b=>b.disabled=false);
       }
     }finally{
-      if(version===epoch)remoteBusy=false;
+      if(version===epoch&&!startedNextRound)remoteBusy=false;
     }
   }
 
