@@ -1736,7 +1736,7 @@
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     try{
       const guess=challenge==="timeline"?timelineOrder.slice():value;
-      const result=await requestGame("guess",{guess});
+      const result=await requestGame("guess",{guess,autoNext:challenge!=="timeline"});
       failedOperation=null;retryGame.hidden=true;
       if(version!==epoch)return;
       score=result.score;answered=result.answered;lives=result.lives;
@@ -1750,6 +1750,17 @@
           (result.timelineSolution||[]).map(item=>[item.token,item.episode]));
       }
       button.disabled=false;timelineSubmit.disabled=false;
+      if(result.autoAdvanced){
+        // The server returned the next protected frame with the guess result:
+        // no second game API round-trip or unnecessary loading screen.
+        selected=null;input.value="";currentFrame=0;
+        closeSuggestions();
+        textAnswer.classList.remove("replay-only");
+        applyServerRound(result);
+        feedback.textContent="Correct! Score: "+score;
+        if(autoFocusInput&&!gameOver&&!textAnswer.hidden)input.focus();
+        return;
+      }
       if(challenge==="communityle"){
         communityleHistory=(result.guesses||[]).map(g=>g.id);
         communityleHints=Object.fromEntries((result.guesses||[]).map(g=>[g.id,g.hints]));
