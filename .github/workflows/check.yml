@@ -13,3 +13,5 @@ jobs:
           node-version: "22"
       - run: npm test
       - run: node --check js/game.js
+      - run: npm run build
+      - run: test ! -e dist/src/server/frames.js && test ! -e dist/src/server/engine.js && test ! -e dist/functions && test -e dist/index.html && test -e dist/_routes.json
