@@ -498,6 +498,7 @@
   function closeCommunityleResult() {
     if (communityleResultModal.hidden) return;
     communityleResultModal.hidden=true;
+    if(pendingAutoClaim){pendingAutoClaim=false;openBoardModal();}
     if(communityleResultPreviousFocus && typeof communityleResultPreviousFocus.focus==="function" &&
        !communityleResultPreviousFocus.disabled && !communityleResultPreviousFocus.hidden)
       communityleResultPreviousFocus.focus();
@@ -1009,6 +1010,7 @@
   }
   function applyServerRound(data) {
     sessionId=data.session;
+    if(typeof data.submitted==="boolean")boardAlreadySubmitted=data.submitted;
     try { localStorage.setItem(sessionStoreKey(),sessionId); }catch(_){}
     score=data.score;answered=data.answered;lives=data.lives;
     scoreEl.textContent=String(score);setHigh();
@@ -1098,6 +1100,7 @@
     inputWasFocusedOnPointerDown=false;
     ++epoch;
     currentRound=null;sessionId=null;remoteBusy=false;
+    boardAlreadySubmitted=false;failedOperation=null;retryGame.hidden=true;
     pending=[];previousId="";
     score=0;answered=0;lives=challenge==="custom"?customLives:1;gameOver=false;
     awaitingNext=false;showUnmodifiedAnswer=false;
