@@ -979,7 +979,7 @@
       card.className="highscores-card";
       const title=document.createElement("h3"); title.textContent=board.name;
       const caption=document.createElement("p"); caption.className="highscores-card-sub";
-      caption.textContent="Website Top 3 · No minimum score";
+      caption.textContent="Website Top 3 · Minimum 1 point";
       card.appendChild(title);card.appendChild(caption);
       if(!board.entries.length){
         const empty=document.createElement("p");empty.className="hs-empty";
