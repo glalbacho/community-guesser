@@ -628,7 +628,6 @@
     clearAnswerReveal();
     communityleShowResult.hidden=false;
     openCommunityleResult();
-    checkBoard(won ? 7 - communityleHistory.length : 0);
   }
   function displayLabel(ep) {
     return ((challenge === "classic" && (mode === "hard" || mode === "impossible")) ||
@@ -863,9 +862,7 @@
       ["classic:hard","Hard Mode"],["classic:impossible","Impossible Mode"],
       ...[1,2,3,4,5,6].map(s=>["season:"+s,"Season "+s]),
       ["challenge:one110","One Life, 110"],["challenge:four","Four Choices"],
-      ["challenge:timeline","Timeline Challenge"],["challenge:progressive","Progressive Reveal"],
-      ["daily:"+dailyDate(),"Daily Challenge · Today"],
-      ["communityle:"+dailyDate(),"Community-le · Today"]
+      ["challenge:timeline","Timeline Challenge"],["challenge:progressive","Progressive Reveal"]
     ];
     const key="custom:"+customLives+":"+customSeasons.slice().sort((a,b)=>a-b).join("-")+":"+customFeatureFlags();
     return [...basic,[key,"Custom Game · saved settings"]];
@@ -877,8 +874,6 @@
       const fields=mode.split(":");
       return "Custom Game · "+fields[1]+" lives · Seasons "+fields[2].replaceAll("-",", ");
     }
-    if(mode.startsWith("daily:"))return "Daily Challenge · "+mode.slice(6);
-    if(mode.startsWith("communityle:"))return "Community-le · "+mode.slice(12);
     return mode;
   }
   function showHighscoreCards(boards) {
@@ -900,7 +895,7 @@
           const name=document.createElement("span"); name.className="hs-name";
           name.textContent="#"+(i+1)+"  "+entry.name;
           const points=document.createElement("span");points.className="hs-points";
-          points.textContent=board.mode.startsWith("communityle:")?(entry.score===0?"Unsolved":(7-entry.score)+" guesses"):entry.score+" pts";
+          points.textContent=entry.score+" pts";
           li.appendChild(name);li.appendChild(points);list.appendChild(li);
         });
         card.appendChild(list);
@@ -921,7 +916,7 @@
       const available=new Map(data.boards.map(entry=>[entry.mode,entry.entries]));
       const basic=publicScoreboards();
       const existing=new Set(basic.map(item=>item[0]));
-      const more=data.boards.filter(entry=>!existing.has(entry.mode))
+      const more=data.boards.filter(entry=>!existing.has(entry.mode)&&! /^(daily|communityle):/.test(entry.mode))
         .map(entry=>[entry.mode,publicScoreboardName(entry.mode)]);
       showHighscoreCards([...basic,...more].map(([mode,name])=>({
         mode,name,entries:available.get(mode)||[]
@@ -1691,7 +1686,14 @@
     progressDetail.textContent = dailyDate() + " (Berlin) · 5 / 5";
     restart.hidden = true;
     showDailyAnswerReveal();
-    checkBoard(score);
+    dailyShowResult.hidden=false;
+    const viewedKey="community-guesser-daily-result-viewed:"+sessionId;
+    let alreadyViewed=false;
+    try{alreadyViewed=localStorage.getItem(viewedKey)==="yes";}catch(_){}
+    if(!alreadyViewed){
+      try{localStorage.setItem(viewedKey,"yes");}catch(_){}
+      openDailyResult();
+    }
   }
   function advance() {
     if (gameOver) return;
