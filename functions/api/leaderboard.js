@@ -1,5 +1,5 @@
 // Verified website-wide high scores. The client never supplies an authoritative score.
-import { load, setup as setupGame, json } from "../_shared/engine.js";
+import { load, setup as setupGame, json } from "../../src/server/engine.js";
 
 const allowedMode=mode=>typeof mode==="string"&&(
   /^classic:(easy|normal|hard|impossible)$/.test(mode)||
