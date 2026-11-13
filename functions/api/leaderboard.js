@@ -1,79 +1,86 @@
-// Cloudflare Pages Function: GET /api/leaderboard?mode=... and POST /api/leaderboard
-// Requires a D1 binding named DB in the Cloudflare Pages project.
-// This is a public, nickname-based leaderboard; browser scores are not tamper-proof.
-const HEADERS = {"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"};
-const allowedMode = mode => typeof mode === "string" && (
-  /^classic:(easy|normal|hard|impossible)$/.test(mode) ||
-  /^season:[1-6]$/.test(mode) ||
-  /^challenge:(four|timeline|progressive|one110)$/.test(mode) ||
-  /^custom:(10|[1-9]):[1-6](?:-[1-6]){0,5}(?::[01]{6})?$/.test(mode) ||
+// Verified website-wide high scores. The client never supplies an authoritative score.
+import { load, setup as setupGame, json } from "../_shared/engine.js";
+
+const allowedMode=mode=>typeof mode==="string"&&(
+  /^classic:(easy|normal|hard|impossible)$/.test(mode)||
+  /^season:[1-6]$/.test(mode)||
+  /^challenge:(four|timeline|progressive|one110)$/.test(mode)||
+  /^custom:(10|[1-9]):[1-6](?:-[1-6]){0,5}:[01]{6}$/.test(mode)||
   /^(daily|communityle):\d{4}-\d{2}-\d{2}$/.test(mode)
 );
-const minimumScore = mode => mode === "classic:easy" ? 15 :
-  /^classic:/.test(mode) ? 10 : 1;
-const reply = (value,status=200) => new Response(JSON.stringify(value),{status,headers:HEADERS});
-async function getBoard(db,mode) {
-  const rows = await db.prepare("SELECT id, name, score FROM leaderboard WHERE mode = ? ORDER BY score DESC, created_at ASC, id ASC LIMIT 3").bind(mode).all();
-  return rows.results || [];
+const minimumScore=mode=>mode==="classic:easy"?15:/^classic:/.test(mode)?10:1;
+async function setup(db){
+  await db.prepare("CREATE TABLE IF NOT EXISTS cg_leaderboard (id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT NOT NULL, name TEXT NOT NULL, score INTEGER NOT NULL, created_at INTEGER NOT NULL)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS cg_leaderboard_rank ON cg_leaderboard(mode,score DESC,created_at ASC,id ASC)").run();
 }
-async function setup(db) {
-  await db.prepare("CREATE TABLE IF NOT EXISTS leaderboard (id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT NOT NULL, name TEXT NOT NULL, score INTEGER NOT NULL, created_at INTEGER NOT NULL)").run();
-  await db.prepare("CREATE INDEX IF NOT EXISTS leaderboard_mode_scores ON leaderboard(mode,score DESC,created_at ASC,id ASC)").run();
+async function getBoard(db,mode){
+  const rows=await db.prepare("SELECT id,name,score FROM cg_leaderboard WHERE mode=? ORDER BY score DESC,created_at ASC,id ASC LIMIT 3").bind(mode).all();
+  return rows.results||[];
 }
-export async function onRequest({request,env}) {
-  if (!env.DB) return reply({error:"Leaderboard database not configured"},503);
-  if (!["GET","POST"].includes(request.method)) return reply({error:"Method not allowed"},405);
-  try {
+const publicRows=rows=>rows.map(({name,score})=>({name,score}));
+export async function onRequest({request,env}){
+  if(!env.DB)return json({error:"Cloudflare D1 not configured. Bind a D1 database as DB."},503);
+  if(!["GET","POST"].includes(request.method))return json({error:"Method not allowed."},405);
+  try{
     await setup(env.DB);
-    if (request.method === "GET") {
-      const params = new URL(request.url).searchParams;
-      if (params.get("catalog") === "1") {
-        // Each game configuration stores at most three entries. Return all
-        // recorded modes so custom configurations are discoverable as well.
-        const rows = await env.DB.prepare(
-          "SELECT mode,name,score FROM leaderboard ORDER BY mode ASC,score DESC,created_at ASC,id ASC LIMIT 1500"
+    if(request.method==="GET"){
+      const q=new URL(request.url).searchParams;
+      if(q.get("catalog")==="1"){
+        const rows=await env.DB.prepare(
+          "SELECT mode,name,score FROM cg_leaderboard ORDER BY mode ASC,score DESC,created_at ASC,id ASC LIMIT 1500"
         ).all();
-        const grouped = new Map();
-        for (const entry of (rows.results || [])) {
-          if (!allowedMode(entry.mode)) continue;
-          if (!grouped.has(entry.mode)) grouped.set(entry.mode,[]);
-          if (grouped.get(entry.mode).length < 3)
-            grouped.get(entry.mode).push({name:entry.name,score:entry.score});
+        const grouped=new Map();
+        for(const e of rows.results||[]){
+          if(!allowedMode(e.mode))continue;
+          if(!grouped.has(e.mode))grouped.set(e.mode,[]);
+          if(grouped.get(e.mode).length<3)grouped.get(e.mode).push({name:e.name,score:e.score});
         }
-        return reply({boards:Array.from(grouped,([mode,entries])=>({mode,entries}))});
+        return json({boards:Array.from(grouped,([mode,entries])=>({mode,entries}))});
       }
-      const mode = params.get("mode");
-      if (!allowedMode(mode)) return reply({error:"Invalid game mode"},400);
-      const entries = await getBoard(env.DB,mode);
-      return reply({entries: entries.map(({name,score})=>({name,score})), minimum:minimumScore(mode)});
+      const mode=q.get("mode");
+      if(!allowedMode(mode))return json({error:"Invalid mode."},400);
+      return json({entries:publicRows(await getBoard(env.DB,mode)),minimum:minimumScore(mode)});
     }
-    if ((Number(request.headers.get("content-length")) || 0) > 2048) return reply({error:"Request too large"},413);
-    let data;
-    try { data = await request.json(); } catch (_) { return reply({error:"Invalid JSON"},400); }
-    if (!data || !allowedMode(data.mode)) return reply({error:"Invalid game mode"},400);
-    const mode = data.mode;
-    const name = typeof data.name === "string" ? data.name.trim().replace(/\s+/g," ") : "";
-    if (!/^[\p{L}\p{N} _.-]{2,20}$/u.test(name)) return reply({error:"Name must be 2–20 characters (letters, numbers, space, . _ -)"},400);
-    const score = data.score;
-    if (!Number.isInteger(score) || score < minimumScore(mode) || score > 100000 ||
-        (/^daily:/.test(mode) && score > 5) ||
-        (/^communityle:/.test(mode) && score > 6) ||
-        (/^challenge:one110$/.test(mode) && score > 110)) {
-      return reply({error:"Score is below the minimum or invalid"},400);
-    }
-    const before = await getBoard(env.DB,mode);
-    if (before.length === 3 && score <= before[2].score) {
-      return reply({error:"This score is not in the website Top 3.",accepted:false,entries:before.map(({name,score})=>({name,score}))},409);
-    }
-    const inserted = await env.DB.prepare("INSERT INTO leaderboard(mode,name,score,created_at) VALUES (?,?,?,?)").bind(mode,name,score,Date.now()).run();
-    const newId = inserted.meta?.last_row_id;
-    await env.DB.prepare("DELETE FROM leaderboard WHERE mode=? AND id NOT IN (SELECT id FROM leaderboard WHERE mode=? ORDER BY score DESC,created_at ASC,id ASC LIMIT 3)").bind(mode,mode).run();
-    const after = await getBoard(env.DB,mode);
-    if (!after.some(x=>x.id === newId)) {
-      return reply({error:"Another player entered the Top 3 first.",accepted:false,entries:after.map(({name,score})=>({name,score}))},409);
-    }
-    return reply({accepted:true,entries:after.map(({name,score})=>({name,score}))},201);
-  } catch (error) {
-    return reply({error:"Leaderboard temporarily unavailable"},503);
+    if(Number(request.headers.get("content-length"))>2048)return json({error:"Request too large."},413);
+    let input;
+    try{input=await request.json();}catch(_){return json({error:"Invalid JSON."},400);}
+    if(!input||!allowedMode(input.mode))return json({error:"Invalid mode."},400);
+    const name=typeof input.name==="string"?input.name.trim().replace(/\s+/g," "):"";
+    if(!/^[\p{L}\p{N} _.-]{2,20}$/u.test(name))
+      return json({error:"Use a nickname of 2–20 letters, numbers, spaces, . _ or -."},400);
+    await setupGame(env.DB);
+    const session=await load(env.DB,input.session);
+    if(!session||session.mode!==input.mode||!session.state.finished)
+      return json({error:"A completed, server-verified game is required."},403);
+    if(session.submitted)return json({error:"This result has already been submitted."},409);
+    const score=session.state.score;
+    if(!Number.isInteger(score)||score<minimumScore(input.mode)||score>100000||
+      /^daily:/.test(input.mode)&&score>5||
+      /^communityle:/.test(input.mode)&&score>6||
+      input.mode==="challenge:one110"&&score>110)
+      return json({error:"Score is below the minimum or invalid."},400);
+    const before=await getBoard(env.DB,input.mode);
+    if(before.length===3&&score<=before[2].score)
+      return json({error:"This result is not in the website Top 3.",accepted:false,entries:publicRows(before)},409);
+    // Claim the session before inserting a leaderboard score. Two concurrent
+    // submissions with one session can never create two entries.
+    const claimed=await env.DB.prepare(
+      "UPDATE cg_sessions SET submitted=1 WHERE id=? AND version=? AND submitted=0"
+    ).bind(session.id,session.version).run();
+    if(claimed.meta?.changes!==1)return json({error:"This result was already submitted."},409);
+    const inserted=await env.DB.prepare(
+      "INSERT INTO cg_leaderboard (mode,name,score,created_at) VALUES (?,?,?,?)"
+    ).bind(input.mode,name,score,Date.now()).run();
+    const rowId=inserted.meta?.last_row_id;
+    await env.DB.prepare(
+      "DELETE FROM cg_leaderboard WHERE mode=? AND id NOT IN (SELECT id FROM cg_leaderboard WHERE mode=? ORDER BY score DESC,created_at ASC,id ASC LIMIT 3)"
+    ).bind(input.mode,input.mode).run();
+    const after=await getBoard(env.DB,input.mode);
+    if(!after.some(x=>x.id===rowId))
+      return json({error:"Another score entered the Top 3 first.",accepted:false,entries:publicRows(after)},409);
+    return json({accepted:true,score,entries:publicRows(after)},201);
+  }catch(error){
+    console.error("Leaderboard error",error);
+    return json({error:"Website leaderboard temporarily unavailable."},503);
   }
 }
