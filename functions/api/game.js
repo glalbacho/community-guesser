@@ -1,4 +1,4 @@
-import {action, json, setup} from "../_shared/engine.js";
+import {action, json, setup} from "../../src/server/engine.js";
 
 export async function onRequest({request,env}) {
   if(!env.DB)return json({error:"Cloudflare D1 is not configured. Bind DB in Pages settings."},503);
