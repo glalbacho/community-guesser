@@ -169,7 +169,8 @@ export function publicState(s) {
   const current=s.current;
   const result={
     session:s.id,mode:s.mode,challenge:s.config.challenge,score:s.score,lives:s.lives,
-    answered:s.answered,finished:s.finished,awaitingNext:s.awaitingNext,stage:s.stage||1,
+    answered:s.answered,finished:s.finished,awaitingNext:s.awaitingNext,
+    lastCorrect:s.awaitingNext?s.history.at(-1)?.correct:null,stage:s.stage||1,
     history:s.config.challenge==="daily" ? s.history.map(h=>({
       id:h.episode,guess:h.guess,correct:h.correct,
       url:h.images[0]?imageUrl(s,h.images[0]):null
