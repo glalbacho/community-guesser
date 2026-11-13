@@ -78,6 +78,12 @@
   const boardModalClose=$("leaderboard-modal-close"),boardModalLater=$("leaderboard-modal-later");
   const boardModalScore=$("leaderboard-modal-score"),boardModalError=$("leaderboard-modal-error");
   const boardReopen=$("leaderboard-reopen"),retryGame=$("retry-game");
+  const boardModalTitle=$("leaderboard-modal-title"),boardModalEyebrow=$("leaderboard-modal-eyebrow");
+  const boardModalDescription=$("leaderboard-modal-description");
+  const one110Hall=$("one110-hall"),one110HallStatus=$("one110-hall-status");
+  const one110HallList=$("one110-hall-list"),one110HallMore=$("one110-hall-more");
+  const one110Claim=$("one110-claim");
+  let one110Cursor=null,one110FetchVersion=0;
   let boardAlreadySubmitted=false,boardModalPreviousFocus=null,pendingAutoClaim=false;
   let failedOperation=null,lastGuess=null;
   const optionsKey = "community-guesser-options-v1";
@@ -264,7 +270,9 @@
   function scoreDescription(points) {
     return challenge === "communityle" ? (points === 0 ? "Unsolved" : (7 - points) + " guesses") : points + " points";
   }
-  const claimPromptKey=()=>sessionId?"community-guesser-top3-offered-v1:"+sessionId:null;
+  const claimPromptKey=()=>sessionId
+    ?(boardMode==="challenge:one110"?"community-guesser-one110-offered-v1:":"community-guesser-top3-offered-v1:")+sessionId
+    :null;
   function closeBoardModal(){
     if(boardModal.hidden)return;
     boardModal.hidden=true;
@@ -274,14 +282,22 @@
   }
   function openBoardModal(){
     if(boardAlreadySubmitted||!boardMode||boardScore<1)return;
+    if(boardMode==="challenge:one110"&&boardScore!==110)return;
+    const one110=boardMode==="challenge:one110";
+    boardModalEyebrow.textContent=one110?"THE 110 CLUB":"NEW HIGH SCORE";
+    boardModalTitle.textContent=one110?"Perfect 110 / 110!":"You made the Top 3!";
+    boardModalDescription.textContent=one110
+      ?"You recognized every Community episode without losing a life. Add your name to the list of finishers!"
+      :"Choose a nickname to appear on the website leaderboard.";
     boardModalPreviousFocus=document.activeElement;
-    boardModalScore.textContent=scoreDescription(boardScore);
+    boardModalScore.textContent=one110?"110 / 110 episodes":scoreDescription(boardScore);
     boardModalError.textContent="";
     boardForm.hidden=false;
     boardModal.hidden=false;
     boardName.focus();
   }
   boardReopen.addEventListener("click",openBoardModal);
+  one110Claim.addEventListener("click",openBoardModal);
   boardModalClose.addEventListener("click",closeBoardModal);
   boardModalLater.addEventListener("click",closeBoardModal);
   boardModalBackdrop.addEventListener("click",closeBoardModal);
@@ -384,23 +400,30 @@
     boardSubmit.disabled = true;
     boardModalError.textContent = "Saving your result…";
     try {
-      const response = await fetch("/api/leaderboard", {
+      const isOne110=boardMode==="challenge:one110";
+      const response = await fetch(isOne110?"/api/one110":"/api/leaderboard", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body:JSON.stringify({mode:boardMode,name,session:sessionId})
       });
       const result = await response.json();
       if (requestVersion !== boardRequest) return;
-      if (!response.ok || !result.accepted || !Array.isArray(result.entries)) {
+      if (!response.ok || !result.accepted || (!isOne110&&!Array.isArray(result.entries))) {
         boardModalError.textContent = result.error || "This score is no longer in the Top 3.";
         boardSubmit.disabled = false;
         return;
       }
       boardAlreadySubmitted=true;
       boardReopen.hidden=true;
+      one110Claim.hidden=true;
       closeBoardModal();
       boardForm.hidden = true;
-      boardStatus.textContent = "You're in the website Top 3!";
-      displayBoard(result.entries);
+      if(isOne110){
+        one110HallStatus.textContent="You're now in the 110 Club. Congratulations!";
+        loadOne110Hall({reset:true});
+      }else{
+        boardStatus.textContent="You're in the website Top 3!";
+        displayBoard(result.entries);
+      }
     } catch (_) {
       if (requestVersion !== boardRequest) return;
       boardSubmit.disabled = false;
