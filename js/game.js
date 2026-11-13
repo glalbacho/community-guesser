@@ -206,11 +206,44 @@
     return value;
   }
   function showServerFailure(error) {
-    feedback.textContent = error?.message || "The game server is unavailable.";
+    feedback.textContent=error?.message||"The game server is unavailable.";
     feedback.classList.add("is-wrong");
     input.disabled=true;button.disabled=true;
     timelineSubmit.disabled=true;fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
+    retryGame.hidden=!failedOperation;
   }
+  retryGame.addEventListener("click",async()=>{
+    if(!failedOperation||remoteBusy)return;
+    const operation=failedOperation;
+    failedOperation=null;
+    retryGame.hidden=true;
+    if(operation.kind==="round"&&operation.action==="next"&&sessionId){
+      // A lost response may mean the server already advanced the round.
+      // Ask for its state first; never advance twice.
+      remoteBusy=true;
+      try{
+        const state=await requestGame("state");
+        if(!state.awaitingNext){applyServerRound(state);return;}
+      }catch(_){/* Retry the original operation below. */}
+      finally{remoteBusy=false;}
+    }
+    if(operation.kind==="guess"){
+      remoteBusy=true;
+      try{
+        const state=await requestGame("state");
+        if(state.answered!==operation.answered||
+          state.guesses?.length!==operation.guesses){
+          applyServerRound(state);
+          feedback.textContent="Connection restored. Your previous answer was saved.";
+          return;
+        }
+      }catch(_){/* Retry if the state cannot be recovered. */}
+      finally{remoteBusy=false;}
+      answer(operation.value);
+      return;
+    }
+    if(operation.kind==="round")loadServerRound(operation.action,operation.extra);
+  });
 
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
@@ -1069,6 +1102,7 @@
     timelineSubmit.disabled=true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     feedback.textContent="Loading screenshot…";
+    failedOperation=null;retryGame.hidden=true;
     try{
       const response=await requestGame(action,extra);
       if(version!==epoch)return;
@@ -1076,7 +1110,7 @@
       input.disabled=false;button.disabled=false;timelineSubmit.disabled=false;
       applyServerRound(response);
     }catch(error){
-      if(version===epoch)showServerFailure(error);
+      if(version===epoch){failedOperation={kind:"round",action,extra};showServerFailure(error);}
     }finally{
       if(version===epoch)remoteBusy=false;
     }
@@ -1703,6 +1737,7 @@
     try{
       const guess=challenge==="timeline"?timelineOrder.slice():value;
       const result=await requestGame("guess",{guess});
+      failedOperation=null;retryGame.hidden=true;
       if(version!==epoch)return;
       score=result.score;answered=result.answered;lives=result.lives;
       // Re-enable round advancement after the acknowledged server response.
@@ -1778,9 +1813,9 @@
       finishGame("Game over! "+explanation+" · Final score: "+score+".",score);
     }catch(error){
       if(version===epoch){
-        feedback.textContent=error.message;
-        button.disabled=false;timelineSubmit.disabled=false;
-        fourChoices.querySelectorAll("button").forEach(b=>b.disabled=false);
+        failedOperation={kind:"guess",value,answered,
+          guesses:communityleHistory.length};
+        showServerFailure(error);
       }
     }finally{
       if(version===epoch&&!startedNextRound)remoteBusy=false;
