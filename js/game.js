@@ -67,6 +67,12 @@
   const board = $("leaderboard"), boardStatus = $("leaderboard-status"), boardForm = $("leaderboard-form");
   const boardName = $("leaderboard-name"), boardSubmit = $("leaderboard-submit"), boardList = $("leaderboard-list");
   let boardRequest = 0, boardMode = "", boardScore = 0;
+  const boardModal=$("leaderboard-modal"),boardModalBackdrop=$("leaderboard-modal-backdrop");
+  const boardModalClose=$("leaderboard-modal-close"),boardModalLater=$("leaderboard-modal-later");
+  const boardModalScore=$("leaderboard-modal-score"),boardModalError=$("leaderboard-modal-error");
+  const boardReopen=$("leaderboard-reopen"),retryGame=$("retry-game");
+  let boardAlreadySubmitted=false,boardModalPreviousFocus=null,pendingAutoClaim=false;
+  let failedOperation=null,lastGuess=null;
   const optionsKey = "community-guesser-options-v1";
   const customKey = "community-guesser-custom-v1";
   const modeKey = "community-guesser-mode";
@@ -200,11 +206,44 @@
     return value;
   }
   function showServerFailure(error) {
-    feedback.textContent = error?.message || "The game server is unavailable.";
+    feedback.textContent=error?.message||"The game server is unavailable.";
     feedback.classList.add("is-wrong");
     input.disabled=true;button.disabled=true;
     timelineSubmit.disabled=true;fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
+    retryGame.hidden=!failedOperation;
   }
+  retryGame.addEventListener("click",async()=>{
+    if(!failedOperation||remoteBusy)return;
+    const operation=failedOperation;
+    failedOperation=null;
+    retryGame.hidden=true;
+    if(operation.kind==="round"&&operation.action==="next"&&sessionId){
+      // A lost response may mean the server already advanced the round.
+      // Ask for its state first; never advance twice.
+      remoteBusy=true;
+      try{
+        const state=await requestGame("state");
+        if(!state.awaitingNext){applyServerRound(state);return;}
+      }catch(_){/* Retry the original operation below. */}
+      finally{remoteBusy=false;}
+    }
+    if(operation.kind==="guess"){
+      remoteBusy=true;
+      try{
+        const state=await requestGame("state");
+        if(state.answered!==operation.answered||
+          state.guesses?.length!==operation.guesses){
+          applyServerRound(state);
+          feedback.textContent="Connection restored. Your previous answer was saved.";
+          return;
+        }
+      }catch(_){/* Retry if the state cannot be recovered. */}
+      finally{remoteBusy=false;}
+      answer(operation.value);
+      return;
+    }
+    if(operation.kind==="round")loadServerRound(operation.action,operation.extra);
+  });
 
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
@@ -218,10 +257,52 @@
   function scoreDescription(points) {
     return challenge === "communityle" ? (points === 0 ? "Unsolved" : (7 - points) + " guesses") : points + " points";
   }
+  const claimPromptKey=()=>sessionId?"community-guesser-top3-offered-v1:"+sessionId:null;
+  function closeBoardModal(){
+    if(boardModal.hidden)return;
+    boardModal.hidden=true;
+    const previous=boardModalPreviousFocus;
+    boardModalPreviousFocus=null;
+    if(previous&&previous.isConnected&&!previous.disabled&&!previous.hidden)previous.focus();
+  }
+  function openBoardModal(){
+    if(boardAlreadySubmitted||!boardMode||boardScore<1)return;
+    boardModalPreviousFocus=document.activeElement;
+    boardModalScore.textContent=scoreDescription(boardScore);
+    boardModalError.textContent="";
+    boardForm.hidden=false;
+    boardModal.hidden=false;
+    boardName.focus();
+  }
+  boardReopen.addEventListener("click",openBoardModal);
+  boardModalClose.addEventListener("click",closeBoardModal);
+  boardModalLater.addEventListener("click",closeBoardModal);
+  boardModalBackdrop.addEventListener("click",closeBoardModal);
+  document.addEventListener("keydown",event=>{
+    if(boardModal.hidden)return;
+    if(event.key==="Escape"){event.preventDefault();closeBoardModal();return;}
+    if(event.key!=="Tab")return;
+    const items=[boardModalClose,boardName,boardSubmit,boardModalLater].filter(el=>!el.disabled);
+    const i=items.indexOf(document.activeElement);
+    if(event.shiftKey&&i<=0){event.preventDefault();items.at(-1).focus();}
+    else if(!event.shiftKey&&i===items.length-1){event.preventDefault();items[0].focus();}
+  });
+  function offerBoardModal(){
+    const key=claimPromptKey();
+    let offered=false;
+    if(key)try{offered=localStorage.getItem(key)==="yes";}catch(_){}
+    if(offered)return;
+    if(key)try{localStorage.setItem(key,"yes");}catch(_){}
+    if(challenge==="communityle"&&!communityleResultModal.hidden)pendingAutoClaim=true;
+    else openBoardModal();
+  }
   function clearBoard() {
     ++boardRequest;
     board.hidden = true;
+    closeBoardModal();
     boardForm.hidden = true;
+    boardReopen.hidden = true;
+    pendingAutoClaim = false;
     boardList.hidden = true;
     boardList.replaceChildren();
     boardStatus.textContent = "";
@@ -257,19 +338,27 @@
     board.hidden = false;
     boardStatus.textContent = "Checking the website Top 3…";
     try {
-      const response = await fetch("/api/leaderboard?mode=" + encodeURIComponent(boardMode),{cache:"no-store"});
+      const response = await fetch("/api/leaderboard?mode=" + encodeURIComponent(boardMode) + "&session=" + encodeURIComponent(sessionId||""),{cache:"no-store"});
       if (!response.ok) throw new Error("Unavailable");
       const result = await response.json();
       if (requestVersion !== boardRequest) return;
       if (!Array.isArray(result.entries)) throw new Error("Invalid response");
-      const entries = result.entries;
-      const qualifies = entries.length < 3 || finalScore > entries[2].score;
-      if (qualifies) {
-        boardStatus.textContent = "You made the website Top 3! Choose a nickname.";
-        boardForm.hidden = false;
-      } else {
-        boardStatus.textContent = "Your score did not reach the website Top 3.";
-        displayBoard(entries);
+      const entries=result.entries;
+      displayBoard(entries);
+      if(boardAlreadySubmitted || result.submitted){
+        boardAlreadySubmitted=true;
+        boardStatus.textContent="Your result has already been submitted.";
+        return;
+      }
+      const qualifies=finalScore>=1&&(entries.length<3||finalScore>entries[2].score);
+      if(qualifies){
+        boardStatus.textContent="You made the website Top 3!";
+        boardReopen.hidden=false;
+        offerBoardModal();
+      }else{
+        boardStatus.textContent=finalScore<1
+          ?"Score at least 1 point to enter the website Top 3."
+          :"Your score did not reach the website Top 3.";
       }
     } catch (_) {
       if (requestVersion !== boardRequest) return;
@@ -281,12 +370,12 @@
     if (boardForm.hidden || !boardMode) return;
     const name = boardName.value.trim();
     if (!/^[\p{L}\p{N} _.-]{1,20}$/u.test(name)) {
-      boardStatus.textContent = "Use 1–20 letters, numbers, spaces, dots, underscores or hyphens.";
+      boardModalError.textContent = "Use 1–20 letters, numbers, spaces, dots, underscores or hyphens.";
       return;
     }
     const requestVersion = boardRequest;
     boardSubmit.disabled = true;
-    boardStatus.textContent = "Saving your result…";
+    boardModalError.textContent = "Saving your result…";
     try {
       const response = await fetch("/api/leaderboard", {
         method:"POST", headers:{"Content-Type":"application/json"},
@@ -295,17 +384,20 @@
       const result = await response.json();
       if (requestVersion !== boardRequest) return;
       if (!response.ok || !result.accepted || !Array.isArray(result.entries)) {
-        boardStatus.textContent = result.error || "This score is no longer in the Top 3.";
+        boardModalError.textContent = result.error || "This score is no longer in the Top 3.";
         boardSubmit.disabled = false;
         return;
       }
+      boardAlreadySubmitted=true;
+      boardReopen.hidden=true;
+      closeBoardModal();
       boardForm.hidden = true;
       boardStatus.textContent = "You're in the website Top 3!";
       displayBoard(result.entries);
     } catch (_) {
       if (requestVersion !== boardRequest) return;
       boardSubmit.disabled = false;
-      boardStatus.textContent = "Could not submit your score. Please retry.";
+      boardModalError.textContent = "Could not submit your score. Please retry.";
     }
   });
 
@@ -439,6 +531,7 @@
   function closeCommunityleResult() {
     if (communityleResultModal.hidden) return;
     communityleResultModal.hidden=true;
+    if(pendingAutoClaim){pendingAutoClaim=false;openBoardModal();}
     if(communityleResultPreviousFocus && typeof communityleResultPreviousFocus.focus==="function" &&
        !communityleResultPreviousFocus.disabled && !communityleResultPreviousFocus.hidden)
       communityleResultPreviousFocus.focus();
@@ -950,6 +1043,7 @@
   }
   function applyServerRound(data) {
     sessionId=data.session;
+    if(typeof data.submitted==="boolean")boardAlreadySubmitted=data.submitted;
     try { localStorage.setItem(sessionStoreKey(),sessionId); }catch(_){}
     score=data.score;answered=data.answered;lives=data.lives;
     scoreEl.textContent=String(score);setHigh();
@@ -1008,6 +1102,7 @@
     timelineSubmit.disabled=true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     feedback.textContent="Loading screenshot…";
+    failedOperation=null;retryGame.hidden=true;
     try{
       const response=await requestGame(action,extra);
       if(version!==epoch)return;
@@ -1015,7 +1110,7 @@
       input.disabled=false;button.disabled=false;timelineSubmit.disabled=false;
       applyServerRound(response);
     }catch(error){
-      if(version===epoch)showServerFailure(error);
+      if(version===epoch){failedOperation={kind:"round",action,extra};showServerFailure(error);}
     }finally{
       if(version===epoch)remoteBusy=false;
     }
@@ -1039,6 +1134,7 @@
     inputWasFocusedOnPointerDown=false;
     ++epoch;
     currentRound=null;sessionId=null;remoteBusy=false;
+    boardAlreadySubmitted=false;failedOperation=null;retryGame.hidden=true;
     pending=[];previousId="";
     score=0;answered=0;lives=challenge==="custom"?customLives:1;gameOver=false;
     awaitingNext=false;showUnmodifiedAnswer=false;
@@ -1640,7 +1736,8 @@
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     try{
       const guess=challenge==="timeline"?timelineOrder.slice():value;
-      const result=await requestGame("guess",{guess});
+      const result=await requestGame("guess",{guess,autoNext:challenge!=="timeline"});
+      failedOperation=null;retryGame.hidden=true;
       if(version!==epoch)return;
       score=result.score;answered=result.answered;lives=result.lives;
       // Re-enable round advancement after the acknowledged server response.
@@ -1653,6 +1750,17 @@
           (result.timelineSolution||[]).map(item=>[item.token,item.episode]));
       }
       button.disabled=false;timelineSubmit.disabled=false;
+      if(result.autoAdvanced){
+        // The server returned the next protected frame with the guess result:
+        // no second game API round-trip or unnecessary loading screen.
+        selected=null;input.value="";currentFrame=0;
+        closeSuggestions();
+        textAnswer.classList.remove("replay-only");
+        applyServerRound(result);
+        feedback.textContent="Correct! Score: "+score;
+        if(autoFocusInput&&!gameOver&&!textAnswer.hidden)input.focus();
+        return;
+      }
       if(challenge==="communityle"){
         communityleHistory=(result.guesses||[]).map(g=>g.id);
         communityleHints=Object.fromEntries((result.guesses||[]).map(g=>[g.id,g.hints]));
@@ -1716,9 +1824,9 @@
       finishGame("Game over! "+explanation+" · Final score: "+score+".",score);
     }catch(error){
       if(version===epoch){
-        feedback.textContent=error.message;
-        button.disabled=false;timelineSubmit.disabled=false;
-        fourChoices.querySelectorAll("button").forEach(b=>b.disabled=false);
+        failedOperation={kind:"guess",value,answered,
+          guesses:communityleHistory.length};
+        showServerFailure(error);
       }
     }finally{
       if(version===epoch&&!startedNextRound)remoteBusy=false;

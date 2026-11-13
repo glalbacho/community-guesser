@@ -124,6 +124,7 @@
           </select>
         </div>
         <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+        <button type="button" id="retry-game" class="retry-game" hidden>↻ Retry connection</button>
         <button type="button" id="restart-challenge" class="restart-challenge" hidden>Play again</button>
 
       </form>
@@ -135,14 +136,28 @@
         <section class="leaderboard" id="leaderboard" aria-label="Website leaderboard" hidden>
           <div class="leaderboard-heading"><span aria-hidden="true">🏆</span><h2>Website Top 3</h2></div>
           <p id="leaderboard-status" class="leaderboard-status" role="status" aria-live="polite"></p>
-          <form id="leaderboard-form" class="leaderboard-form" hidden>
-            <label for="leaderboard-name">Top 3! Enter a name to claim your place</label>
-            <div class="leaderboard-entry"><input id="leaderboard-name" type="text" maxlength="20" minlength="1" autocomplete="nickname" placeholder="Your nickname" required><button id="leaderboard-submit" type="submit">Save score</button></div>
-            <p class="leaderboard-note">Your nickname and score will be public. Avoid using private information.</p>
-          </form>
+          <button type="button" id="leaderboard-reopen" class="leaderboard-reopen" hidden>🏆 Claim your Top 3 spot</button>
           <ol id="leaderboard-list" class="leaderboard-list" hidden></ol>
         </section>
     </main>
+    <div id="leaderboard-modal" class="leaderboard-modal" hidden>
+      <div class="leaderboard-modal-backdrop" id="leaderboard-modal-backdrop"></div>
+      <section class="leaderboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="leaderboard-modal-title" aria-describedby="leaderboard-modal-description" tabindex="-1">
+        <button type="button" id="leaderboard-modal-close" class="leaderboard-modal-close" aria-label="Close Top 3 nickname dialog">×</button>
+        <div class="leaderboard-modal-medal" aria-hidden="true">🏆</div>
+        <div class="leaderboard-modal-eyebrow">NEW HIGH SCORE</div>
+        <h2 id="leaderboard-modal-title">You made the Top 3!</h2>
+        <p id="leaderboard-modal-description">Choose a nickname to appear on the website leaderboard.</p>
+        <p id="leaderboard-modal-score" class="leaderboard-modal-score"></p>
+        <form id="leaderboard-form" class="leaderboard-form">
+          <label for="leaderboard-name">Your nickname <span>(max. 20 characters)</span></label>
+          <div class="leaderboard-entry"><input id="leaderboard-name" type="text" maxlength="20" minlength="1" autocomplete="nickname" placeholder="Enter your nickname" required><button id="leaderboard-submit" type="submit">Save score</button></div>
+          <p id="leaderboard-modal-error" class="leaderboard-modal-error" role="status" aria-live="polite"></p>
+          <p class="leaderboard-note">Your nickname and score are public. Don't enter private information.</p>
+          <button type="button" id="leaderboard-modal-later" class="leaderboard-modal-later">Not now</button>
+        </form>
+      </section>
+    </div>
     <div id="communityle-result-modal" class="communityle-result-modal" hidden>
       <div class="communityle-result-backdrop" id="communityle-result-backdrop"></div>
       <section class="communityle-result-dialog" role="dialog" aria-modal="true" aria-labelledby="communityle-result-title" aria-describedby="communityle-result-description" tabindex="-1">

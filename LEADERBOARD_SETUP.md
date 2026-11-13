@@ -18,7 +18,7 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 
 ## Leaderboard rules
 
-- No minimum score: even a finished game with 0 points can qualify if a place is available.
+- A completed, server-verified score of **at least 1 point** is required. Zero-point runs never qualify.
 - Store only the three highest verified results per mode; the third place must be strictly beaten once three entries exist. Equal scores preserve the earlier entry.
 - A qualifying player chooses a nickname of 1–20 characters (letters, digits, spaces, period, underscore, hyphen). No account is needed.
 - Unsolved Community-le rounds show as `Unsolved`, rather than an invented number of guesses.
@@ -45,3 +45,11 @@ In **Settings → Build → Build configuration**, click the pencil icon and set
 - Root directory: empty (repository root)
 
 The build script includes only `index.html`, `assets/`, `css/`, `js/episodes.js`, `js/game.js`, and `_routes.json` in `dist`. Neither `src/server` nor the `functions` source are public static files. Run `npm run build` locally to verify before deployment.
+
+## Usability and abuse protections
+
+- A qualifying player sees a focus-managed modal for their self-chosen nickname (1–20 characters). Closing the modal leaves a visible claim button. The modal is shown automatically only once per session; an already-submitted session is confirmed by D1 after a reload and cannot submit again.
+- When the game API is interrupted, a Retry connection button appears. The retry first checks server state when needed, preventing duplicate round advances or counted answers after a lost response.
+- Correct guesses normally advance and select the next screenshot in one authenticated API request, avoiding a second round-trip.
+- D1 maintains sliding time-window style fixed buckets with hashed client IP + time period. Limits: 600 game API requests per five minutes, 80 starts per five minutes, 12 high-score submissions and 240 leaderboard reads per five minutes. The API returns 429 with Retry-After on excess. These limits are a low-cost abuse deterrent, not a replacement for Cloudflare edge/WAF protection; very large distributed floods may still exhaust quotas.
+- The image proxy remains unrestricted to avoid extra D1 round trips for image loading; randomly generated session and frame tokens make unguided guessing impractical.
