@@ -13,13 +13,17 @@ export async function rateLimit(db,request,category,maxRequests,windowSeconds=30
     .map(byte=>byte.toString(16).padStart(2,"0")).join("");
   const key=category+":"+fingerprint;
   await db.prepare("CREATE TABLE IF NOT EXISTS cg_rate_buckets (bucket_key TEXT PRIMARY KEY,hits INTEGER NOT NULL,expires_at INTEGER NOT NULL)").run();
-  const row=await db.prepare(
-    "INSERT INTO cg_rate_buckets (bucket_key,hits,expires_at) VALUES (?,1,?) ON CONFLICT(bucket_key) DO UPDATE SET hits=hits+1 RETURNING hits"
-  ).bind(key,(started+1)*windowSeconds).first();
+  await db.prepare(
+    "INSERT INTO cg_rate_buckets (bucket_key,hits,expires_at) VALUES (?,1,?) ON CONFLICT(bucket_key) DO UPDATE SET hits=hits+1"
+  ).bind(key,(started+1)*windowSeconds).run();
+  const row=await db.prepare("SELECT hits FROM cg_rate_buckets WHERE bucket_key=?")
+    .bind(key).first();
   if(Math.random()<0.015){
     // Opportunistic cleanup, bounded to avoid large delete transactions.
-    await db.prepare("DELETE FROM cg_rate_buckets WHERE bucket_key IN (SELECT bucket_key FROM cg_rate_buckets WHERE expires_at<? LIMIT 100)")
-      .bind(Math.floor(Date.now()/1000)-windowSeconds).run();
+    try {
+      await db.prepare("DELETE FROM cg_rate_buckets WHERE bucket_key IN (SELECT bucket_key FROM cg_rate_buckets WHERE expires_at<? LIMIT 100)")
+        .bind(Math.floor(Date.now()/1000)-windowSeconds).run();
+    } catch(_){ /* Cleanup is best effort. */ }
   }
   if(Number(row?.hits)<=maxRequests)return null;
   const wait=Math.max(1,(started+1)*windowSeconds-Math.floor(Date.now()/1000));
