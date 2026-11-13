@@ -78,6 +78,12 @@
   const boardModalClose=$("leaderboard-modal-close"),boardModalLater=$("leaderboard-modal-later");
   const boardModalScore=$("leaderboard-modal-score"),boardModalError=$("leaderboard-modal-error");
   const boardReopen=$("leaderboard-reopen"),retryGame=$("retry-game");
+  const boardModalTitle=$("leaderboard-modal-title"),boardModalEyebrow=$("leaderboard-modal-eyebrow");
+  const boardModalDescription=$("leaderboard-modal-description");
+  const one110Hall=$("one110-hall"),one110HallStatus=$("one110-hall-status");
+  const one110HallList=$("one110-hall-list"),one110HallMore=$("one110-hall-more");
+  const one110Claim=$("one110-claim");
+  let one110Cursor=null,one110FetchVersion=0;
   let boardAlreadySubmitted=false,boardModalPreviousFocus=null,pendingAutoClaim=false;
   let failedOperation=null,lastGuess=null;
   const optionsKey = "community-guesser-options-v1";
@@ -264,7 +270,9 @@
   function scoreDescription(points) {
     return challenge === "communityle" ? (points === 0 ? "Unsolved" : (7 - points) + " guesses") : points + " points";
   }
-  const claimPromptKey=()=>sessionId?"community-guesser-top3-offered-v1:"+sessionId:null;
+  const claimPromptKey=()=>sessionId
+    ?(boardMode==="challenge:one110"?"community-guesser-one110-offered-v1:":"community-guesser-top3-offered-v1:")+sessionId
+    :null;
   function closeBoardModal(){
     if(boardModal.hidden)return;
     boardModal.hidden=true;
@@ -274,14 +282,22 @@
   }
   function openBoardModal(){
     if(boardAlreadySubmitted||!boardMode||boardScore<1)return;
+    if(boardMode==="challenge:one110"&&boardScore!==110)return;
+    const one110=boardMode==="challenge:one110";
+    boardModalEyebrow.textContent=one110?"THE 110 CLUB":"NEW HIGH SCORE";
+    boardModalTitle.textContent=one110?"Perfect 110 / 110!":"You made the Top 3!";
+    boardModalDescription.textContent=one110
+      ?"You recognized every Community episode without losing a life. Add your name to the list of finishers!"
+      :"Choose a nickname to appear on the website leaderboard.";
     boardModalPreviousFocus=document.activeElement;
-    boardModalScore.textContent=scoreDescription(boardScore);
+    boardModalScore.textContent=one110?"110 / 110 episodes":scoreDescription(boardScore);
     boardModalError.textContent="";
     boardForm.hidden=false;
     boardModal.hidden=false;
     boardName.focus();
   }
   boardReopen.addEventListener("click",openBoardModal);
+  one110Claim.addEventListener("click",openBoardModal);
   boardModalClose.addEventListener("click",closeBoardModal);
   boardModalLater.addEventListener("click",closeBoardModal);
   boardModalBackdrop.addEventListener("click",closeBoardModal);
@@ -384,23 +400,30 @@
     boardSubmit.disabled = true;
     boardModalError.textContent = "Saving your result…";
     try {
-      const response = await fetch("/api/leaderboard", {
+      const isOne110=boardMode==="challenge:one110";
+      const response = await fetch(isOne110?"/api/one110":"/api/leaderboard", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body:JSON.stringify({mode:boardMode,name,session:sessionId})
       });
       const result = await response.json();
       if (requestVersion !== boardRequest) return;
-      if (!response.ok || !result.accepted || !Array.isArray(result.entries)) {
+      if (!response.ok || !result.accepted || (!isOne110&&!Array.isArray(result.entries))) {
         boardModalError.textContent = result.error || "This score is no longer in the Top 3.";
         boardSubmit.disabled = false;
         return;
       }
       boardAlreadySubmitted=true;
       boardReopen.hidden=true;
+      one110Claim.hidden=true;
       closeBoardModal();
       boardForm.hidden = true;
-      boardStatus.textContent = "You're in the website Top 3!";
-      displayBoard(result.entries);
+      if(isOne110){
+        one110HallStatus.textContent="You're now in the 110 Club. Congratulations!";
+        loadOne110Hall({reset:true});
+      }else{
+        boardStatus.textContent="You're in the website Top 3!";
+        displayBoard(result.entries);
+      }
     } catch (_) {
       if (requestVersion !== boardRequest) return;
       boardSubmit.disabled = false;
@@ -950,6 +973,68 @@
       won ? "correct" : "wrong");
   }
 
+  // One Life, 110 has an unranked completion hall. Load entries in pages,
+  // so every verified finisher can join without growing one huge response.
+  async function loadOne110Hall({reset=false,offer=false}={}){
+    if(challenge!=="one110")return;
+    const version=++one110FetchVersion;
+    if(reset){
+      one110Cursor=null;
+      one110HallList.replaceChildren();
+      one110HallStatus.textContent="Loading the 110 Club…";
+      one110Claim.hidden=true;
+    }
+    one110HallMore.disabled=true;
+    const before=one110Cursor;
+    const params=new URLSearchParams();
+    if(before)params.set("before",String(before));
+    if(sessionId)params.set("session",sessionId);
+    try{
+      const response=await fetch("/api/one110?"+params.toString(),{cache:"no-store"});
+      if(!response.ok)throw new Error("The 110 Club is temporarily unavailable.");
+      const data=await response.json();
+      if(version!==one110FetchVersion||challenge!=="one110")return;
+      if(!Array.isArray(data.entries))throw new Error("Invalid completion list.");
+      for(const entry of data.entries){
+        const item=document.createElement("li");
+        const name=document.createElement("span");
+        name.className="one110-hall-member";
+        name.textContent=entry.name;
+        const date=document.createElement("span");
+        date.className="one110-hall-date";
+        const completed=new Date(entry.created_at);
+        date.textContent=Number.isFinite(completed.getTime())
+          ?completed.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"})
+          :"Completed";
+        item.appendChild(name);
+        item.appendChild(date);
+        one110HallList.appendChild(item);
+      }
+      one110Cursor=data.nextCursor||null;
+      one110HallMore.hidden=!one110Cursor;
+      one110HallMore.disabled=false;
+      const total=Number(data.total)||0;
+      one110HallStatus.textContent=total===0
+        ?"No perfect runs registered yet. Be the first!"
+        :total+" player"+(total===1?" has":"s have")+" completed all 110 episodes.";
+      if(data.submitted){
+        boardAlreadySubmitted=true;
+        one110Claim.hidden=true;
+        one110HallStatus.textContent="Your perfect run is already registered. "+one110HallStatus.textContent;
+      }else if(data.eligible && gameOver && score===110 && answered===110){
+        boardMode="challenge:one110";
+        boardScore=110;
+        one110Claim.hidden=false;
+        if(offer)offerBoardModal();
+      }
+    }catch(error){
+      if(version!==one110FetchVersion||challenge!=="one110")return;
+      one110HallStatus.textContent=error.message||"The 110 Club is temporarily unavailable.";
+      one110HallMore.disabled=false;
+    }
+  }
+  one110HallMore.addEventListener("click",()=>loadOne110Hall());
+
   // A single read-only Hall of Fame. It never treats local browser scores
   // as global results when the D1 binding is not configured.
   function publicScoreboards() {
@@ -957,7 +1042,7 @@
       ["classic:easy","Easy Mode"],["classic:normal","Normal Mode"],
       ["classic:hard","Hard Mode"],["classic:impossible","Impossible Mode"],
       ...[1,2,3,4,5,6].map(s=>["season:"+s,"Season "+s]),
-      ["challenge:one110","One Life, 110"],["challenge:four","Four Choices"],
+      ["challenge:four","Four Choices"],
       ["challenge:timeline","Timeline Challenge"],["challenge:progressive","Progressive Reveal"]
     ];
     const key="custom:"+customLives+":"+customSeasons.slice().sort((a,b)=>a-b).join("-")+":"+customFeatureFlags();
@@ -1012,7 +1097,7 @@
       const available=new Map(data.boards.map(entry=>[entry.mode,entry.entries]));
       const basic=publicScoreboards();
       const existing=new Set(basic.map(item=>item[0]));
-      const more=data.boards.filter(entry=>!existing.has(entry.mode)&&! /^(daily|communityle):/.test(entry.mode))
+      const more=data.boards.filter(entry=>!existing.has(entry.mode)&&! /^(daily|communityle):/.test(entry.mode)&&entry.mode!=="challenge:one110")
         .map(entry=>[entry.mode,publicScoreboardName(entry.mode)]);
       showHighscoreCards([...basic,...more].map(([mode,name])=>({
         mode,name,entries:available.get(mode)||[]
@@ -1118,6 +1203,8 @@
     revealControls.hidden = !revealEnabled();
     highLabel.textContent = challenge === "daily" ? "Best Daily Score" : "High Score";
     communityleBoard.hidden = challenge !== "communityle";
+    one110Hall.hidden=challenge!=="one110";
+    if(challenge==="one110")loadOne110Hall({reset:true});
     form.querySelector(".score").hidden = challenge === "communityle" || (challenge === "custom" && !customStarted);
 
     restart.hidden = true;
@@ -1148,7 +1235,9 @@
     awaitingNext=false;gameOver=false;showUnmodifiedAnswer=false;
     if(!data.round) {
       currentRound=null;
-      if(data.finished)finishGame("Challenge complete! Final score: "+score+".");
+      if(data.finished)finishGame(challenge==="one110"&&score===110
+        ?"Perfect! You recognized all 110 episodes."
+        :"Challenge complete! Final score: "+score+".");
       return;
     }
     if(challenge==="timeline"){
@@ -1770,7 +1859,10 @@
         revealTimelineInPlace(!message.startsWith("Game over"));
       }
       // Other modes already display the answer next to the existing image.
-      checkBoard(finalScore);
+      if(challenge==="one110"){
+        if(score===110&&answered===110)loadOne110Hall({reset:true,offer:true});
+        else one110Claim.hidden=true;
+      }else checkBoard(finalScore);
     }
   }
   function finishDaily() {
