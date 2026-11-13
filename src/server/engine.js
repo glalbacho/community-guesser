@@ -199,7 +199,7 @@ export async function start(db,settings,resumeId) {
     const existing=await load(db,resumeId);
     if(existing?.mode===mode&&existing.state.config.challenge===config.challenge&&
       existing.state.mode===mode&&now()-existing.updated_at<7*86400e3)
-      return publicState(existing.state);
+      return {...publicState(existing.state),submitted:existing.submitted===1};
   }
   const s={id:uuid(),config,date,mode,score:0,lives:config.challenge==="custom"?config.lives:1,
     answered:0,seen:[],previous:null,current:null,finished:false,awaitingNext:false,
@@ -213,7 +213,7 @@ export async function start(db,settings,resumeId) {
     try {await db.prepare("DELETE FROM cg_sessions WHERE id IN (SELECT id FROM cg_sessions WHERE updated_at<? ORDER BY updated_at LIMIT 200)")
       .bind(now()-30*86400e3).run();}catch(_){/* cleanup is best effort */}
   }
-  return publicState(s);
+  return {...publicState(s),submitted:false};
 }
 export async function action(db,payload) {
   if(!payload||typeof payload!=="object")return json({error:"Invalid request."},400);
@@ -227,8 +227,8 @@ export async function action(db,payload) {
   const s=row.state,c=s.config;
   if((c.challenge==="daily"||c.challenge==="communityle")&&s.date!==berlinDate())
     return json({error:"The daily puzzle has reset. Start today's game."},409);
-  if(payload.action==="state")return json(publicState(s));
-  if(s.finished)return json({error:"This game is finished.",...publicState(s)},409);
+  if(payload.action==="state")return json({...publicState(s),submitted:row.submitted===1});
+  if(s.finished)return json({error:"This game is finished.",...publicState(s),submitted:row.submitted===1},409);
   if(payload.action==="reveal"){
     if(!revealEnabled(c)||s.awaitingNext||s.stage>=5)return json({error:"Cannot reveal now."},409);
     s.stage++;
