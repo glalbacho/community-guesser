@@ -198,6 +198,12 @@ export async function start(db,settings,resumeId) {
   await makeRound(db,s);
   await db.prepare("INSERT INTO cg_sessions (id,mode,state,updated_at) VALUES (?,?,?,?)")
     .bind(s.id,mode,JSON.stringify(s),now()).run();
+  // Small opportunistic batches prevent abandoned anonymous sessions from
+  // consuming the free D1 storage quota indefinitely.
+  if(Math.random()<0.02){
+    try {await db.prepare("DELETE FROM cg_sessions WHERE id IN (SELECT id FROM cg_sessions WHERE updated_at<? ORDER BY updated_at LIMIT 200)")
+      .bind(now()-30*86400e3).run();}catch(_){/* cleanup is best effort */}
+  }
   return publicState(s);
 }
 export async function action(db,payload) {
