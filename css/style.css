@@ -358,3 +358,23 @@ button,select,input{font-family:inherit}
 .daily-result-status{min-height:17px;color:#b7e2c2;font-size:12px;margin:11px 0 0}
 @media(max-width:420px){.daily-result-dialog{padding:25px 16px 18px;border-radius:15px}.daily-result-actions{gap:7px}.daily-result-actions button{font-size:13px}}
 @media(prefers-reduced-motion:reduce){.daily-result-dialog{animation:none}}
+
+
+/* One Life 110 completion hall — explicitly not a ranking or Top 3. */
+.one110-hall{width:min(100%,800px);margin:22px auto 32px;padding:24px 22px;border:1px solid #746e57;border-radius:18px;background:linear-gradient(135deg,#303343,#272d3b 65%,#282b35);color:#eef2f9;text-align:left;box-shadow:0 14px 35px #0003}
+.one110-hall[hidden],.one110-claim[hidden],.one110-hall-more[hidden]{display:none!important}
+.one110-hall-heading{display:flex;gap:14px;align-items:center}
+.one110-hall-trophy{font-size:35px;line-height:1}
+.one110-hall-eyebrow{font-size:11px;font-weight:800;color:#dfc081;letter-spacing:.17em;margin-bottom:4px}
+.one110-hall-heading h2{font-size:clamp(19px,3vw,24px);line-height:1.23;margin:0;color:#fff}
+.one110-hall-description{margin:14px 0 10px;color:#bdc6d7;font-size:13px;line-height:1.55}
+.one110-hall-status{font-size:13px;line-height:1.5;color:#d8dbe4;margin:11px 0}
+.one110-claim{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(120deg,#795c32,#a07c3f);color:#fff5e2;border:1px solid #d7b571;padding:12px 17px;min-height:44px;border-radius:11px;font:inherit;font-size:14px;font-weight:800;cursor:pointer;margin:5px 0 13px}
+.one110-claim:hover{filter:brightness(1.12)}
+.one110-hall-list{list-style:none;padding:0;margin:12px 0 4px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.one110-hall-list li{display:flex;justify-content:space-between;align-items:center;gap:9px;background:#373b4b;border:1px solid #5d6476;border-radius:10px;padding:10px 13px;font-size:13px;min-width:0}
+.one110-hall-member{font-weight:700;overflow-wrap:anywhere;min-width:0;color:#fff}
+.one110-hall-date{color:#bac2d1;font-size:11px;flex-shrink:0;text-align:right}
+.one110-hall-more{background:#3b516e;border:1px solid #7794bb;border-radius:9px;color:#f0f5ff;padding:10px 18px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;margin:12px auto 0;display:block}
+.one110-hall-more:disabled{opacity:.6;cursor:wait}
+@media(max-width:650px){.one110-hall{padding:17px 14px}.one110-hall-list{grid-template-columns:1fr}.one110-hall-trophy{font-size:29px}}
