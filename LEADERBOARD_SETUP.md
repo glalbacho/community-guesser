@@ -23,6 +23,14 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 - A qualifying player chooses a nickname of 1–20 characters (letters, digits, spaces, period, underscore, hyphen). No account is needed.
 - Unsolved Community-le rounds show as `Unsolved`, rather than an invented number of guesses.
 
+## One Life, 110 completion hall
+
+- One Life, 110 is **not a Top 3 leaderboard**. It has its own unranked, unlimited **110 Club** on the One Life game screen. Winners are shown newest first, 50 at a time, with `Show more finishers` to browse the complete list.
+- A player can register a self-chosen 1–20-character nickname **only after one server-verified game correctly identifies all 110 different episodes without a single mistake**. The backend checks the completed session, all 110 answers and the 110 distinct episodes; it never trusts a browser-supplied score.
+- Each completed session may enter once. Registration uses the existing `cg_sessions.submitted` flag and a unique session identifier in `cg_one110_finishers`. Other highscore rankings remain unchanged.
+- Previously verified `challenge:one110` score-110 entries from the old leaderboard are automatically included; lower-score historical entries are excluded. The old Top 3 API rejects any new One Life entries and no longer lists that mode.
+- `/api/one110` supports reading pages and registering finished runs. It uses the same D1 database and rate-limit protection, so **no Cloudflare configuration changes are required**.
+
 ## Architecture
 
 - The browser receives a randomly generated image token and never receives the solution to an unanswered round.
