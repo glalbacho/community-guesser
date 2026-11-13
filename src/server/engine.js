@@ -278,7 +278,10 @@ export async function action(db,payload) {
   s.history.push({episode:s.current.episode||null,images:s.current.images,
     guess,correct});
   if(correct) s.score+=c.challenge==="daily"?1:revealEnabled(c)?6-s.stage:1;
-  if(c.challenge==="daily"&&s.answered>=5)s.finished=true;
+  if(c.challenge==="daily") {
+    if(s.answered>=5)s.finished=true;
+    else s.awaitingNext=true;
+  }
   else if(c.challenge==="one110"&&s.answered>=EPISODES.length)s.finished=true;
   else if(c.challenge==="custom"&&c.features.once&&s.answered>=eligible(c).length)s.finished=true;
   else if(!correct){
