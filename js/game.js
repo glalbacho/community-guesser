@@ -998,8 +998,7 @@
       else if(challenge==="communityle")finishCommunityle();
       else finishGame("Game over! Final score: "+score+".");
     }else if(data.awaitingNext) {
-      const last=(data.history||[]).at(-1);
-      if(last && !last.correct){
+      if(data.lastCorrect===false){
         currentRound.id=data.revealedEpisode;
         pauseAfterWrongAnswer("Wrong! Correct answer: "+label(byId[data.revealedEpisode])+".");
       }else{
