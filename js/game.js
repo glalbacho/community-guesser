@@ -356,6 +356,8 @@
   }
   async function checkBoard(finalScore) {
     clearBoard();
+    // Custom games have incomparable rules and never use a global leaderboard.
+    if(challenge==="custom")return;
     const requestVersion = boardRequest;
     boardMode = boardKey();
     boardScore = finalScore;
@@ -1045,16 +1047,11 @@
       ["challenge:timeline","Timeline Challenge"],["challenge:episodeTimeline","Episode Timeline"],
       ["challenge:progressive","Progressive Reveal"]
     ];
-    const key="custom:"+customLives+":"+customSeasons.slice().sort((a,b)=>a-b).join("-")+":"+customFeatureFlags();
-    return [...basic,[key,"Custom Game · saved settings"]];
+    return basic;
   }
   function publicScoreboardName(mode) {
     const known=publicScoreboards().find(row=>row[0]===mode);
     if(known)return known[1];
-    if(mode.startsWith("custom:")) {
-      const fields=mode.split(":");
-      return "Custom Game · "+fields[1]+" lives · Seasons "+fields[2].replaceAll("-",", ");
-    }
     return mode;
   }
   function showHighscoreCards(boards) {
@@ -1097,7 +1094,7 @@
       const available=new Map(data.boards.map(entry=>[entry.mode,entry.entries]));
       const basic=publicScoreboards();
       const existing=new Set(basic.map(item=>item[0]));
-      const more=data.boards.filter(entry=>!existing.has(entry.mode)&&! /^(daily|communityle|season):/.test(entry.mode)&&entry.mode!=="challenge:one110")
+      const more=data.boards.filter(entry=>!existing.has(entry.mode)&&! /^(daily|communityle|season|custom):/.test(entry.mode)&&entry.mode!=="challenge:one110")
         .map(entry=>[entry.mode,publicScoreboardName(entry.mode)]);
       showHighscoreCards([...basic,...more].map(([mode,name])=>({
         mode,name,entries:available.get(mode)||[]
@@ -1877,7 +1874,7 @@
       if(challenge==="one110"){
         if(score===110&&answered===110)loadOne110Hall({reset:true,offer:true});
         else one110Claim.hidden=true;
-      }else checkBoard(finalScore);
+      }else if(challenge!=="custom")checkBoard(finalScore);
     }
   }
   function finishDaily() {
