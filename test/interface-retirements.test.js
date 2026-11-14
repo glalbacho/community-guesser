@@ -61,3 +61,13 @@ test("Hide-solved Custom option is conditional and removes only verified solved 
   assert.match(game,/solvedEpisodes=new Set\(\);/);
   assert.match(game,/else if\(challenge!=="custom"\)checkBoard\(finalScore\)/);
 });
+
+test("Communityle branding has no hyphen while the existing game route and IDs stay stable",()=>{
+  assert.doesNotMatch(html,/Community-le|COMMUNITY-LE/);
+  assert.doesNotMatch(game,/Community-le|COMMUNITY-LE/);
+  assert.match(html,/data-challenge="communityle"[^>]*><span>Communityle<\/span>/);
+  assert.match(html,/COMMUNITYLE · DAILY/);
+  assert.match(game,/communityle: "Communityle"/);
+  assert.match(game,/Play today's Communityle:/);
+  assert.match(game,/#\/communityle/);
+});

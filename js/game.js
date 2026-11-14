@@ -101,7 +101,7 @@
     episodeTimeline: "Episode Timeline",
     one110: "One Life, 110",
     daily: "Daily Challenge", custom: "Custom Game",
-    communityle: "Community-le"
+    communityle: "Communityle"
   };
   const label = ep => ep.id + " " + ep.title;
   const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -661,9 +661,9 @@
   function communityleShareText() {
     const won=communityleHistory.includes(communityleSolution.id);
     const count=won?communityleHistory.indexOf(communityleSolution.id)+1:"X";
-    return "Community-le " + dailyDate() + " " + count + "/6"
+    return "Communityle " + dailyDate() + " " + count + "/6"
       + "\n\n" + communityleResultRows().join("\n")
-      + "\n\nPlay today's Community-le:\n" + communityleShareUrl();
+      + "\n\nPlay today's Communityle:\n" + communityleShareUrl();
   }
   function closeCommunityleResult() {
     if (communityleResultModal.hidden) return;
@@ -681,7 +681,7 @@
     communityleResultDescription.textContent=won
       ?"You solved today's episode. Share your spoiler-free result!"
       :"All six guesses used. Share your result and challenge your friends.";
-    communityleResultScore.textContent="Community-le · "+dailyDate()+" · "+
+    communityleResultScore.textContent="Communityle · "+dailyDate()+" · "+
       (won?communityleHistory.indexOf(communityleSolution.id)+1:"X")+"/6";
     communityleResultGrid.replaceChildren();
     communityleResultRows().forEach((line,i)=>{
@@ -759,7 +759,7 @@
     // Once solved (or out of guesses), reveal the full unaltered screenshot.
     displayFrame();
     feedback.textContent = won
-      ? "Community-le solved in " + communityleHistory.length + " / 6 guesses!"
+      ? "Communityle solved in " + communityleHistory.length + " / 6 guesses!"
       : "No guesses left. The episode was " + label(byId[communityleSolution.id]) + ".";
     renderCommunityle();
     clearAnswerReveal();
@@ -984,7 +984,7 @@
     clearAnswerReveal();
     if (!communityleSolution) return;
     answerReveal.hidden = false;
-    answerRevealTitle.textContent = won ? "Community-le solved!" : "Community-le answer revealed";
+    answerRevealTitle.textContent = won ? "Communityle solved!" : "Communityle answer revealed";
     answerRevealDetail.textContent = won ? "You solved today's episode."
       : "You used all six guesses. This was the correct episode.";
     addAnswerReveal(communityleSolution.id, communityleSolution.url,
@@ -1496,7 +1496,7 @@
       }
     } else if (challenge === "communityle" && !communityleDone()) {
       // Blur/pixelation grows clearer with each guess, but original colours
-      // stay unchanged so visual clues remain fair in Community-le.
+      // stay unchanged so visual clues remain fair in Communityle.
       const stage = communityleHistory.length;
       const resolutions = [9, 15, 26, 46, 90, 180];
       const blurs = [25, 18, 12, 8, 4, 1];
@@ -1513,7 +1513,7 @@
         canvas.style.cssText = "width:100%;height:100%;object-fit:contain;image-rendering:pixelated";
         canvas.style.filter = "blur(" + blurs[stage] + "px)";
         canvas.setAttribute("role", "img");
-        canvas.setAttribute("aria-label", "Daily Community-le distorted screenshot, attempt " + (stage+1));
+        canvas.setAttribute("aria-label", "Daily Communityle distorted screenshot, attempt " + (stage+1));
         imageBox.replaceChildren(canvas);
       } catch (_) {
         frame.img.style.filter = "blur(" + blurs[stage] + "px)";
