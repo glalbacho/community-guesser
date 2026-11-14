@@ -53,11 +53,16 @@
   const customSummary = $("custom-summary");
   const customModifiers = {
     four:$("custom-four"), numbers:$("custom-numbers"), three:$("custom-three"),
-    reveal:$("custom-reveal"), distort:$("custom-distort"), once:$("custom-once")
+    reveal:$("custom-reveal"), distort:$("custom-distort"), once:$("custom-once"),
+    hideSolved:$("custom-hide-solved")
   };
-  const modifierKeys = ["four","numbers","three","reveal","distort","once"];
-  const customFeatureFlags = () => modifierKeys.map(key => customFeatures[key] ? "1" : "0").join("");
+  const modifierKeys = ["four","numbers","three","reveal","distort","once","hideSolved"];
+  const hideSolvedRow=$("custom-hide-solved-row");
+  // Keep old Custom Game personal high scores when the new rule is off.
+  const customFeatureFlags = () => ["four","numbers","three","reveal","distort","once"]
+    .map(key => customFeatures[key] ? "1" : "0").join("") + (customFeatures.hideSolved?"h":"");
   const customHas = key => challenge === "custom" && customStarted && customFeatures[key];
+  const hideSolvedEnabled=()=>customHas("once")&&customHas("hideSolved");
   const revealEnabled = () => challenge === "progressive" || customHas("reveal");
   const fourEnabled = () => challenge === "four" || customHas("four");
   const threeEnabled = () => (challenge === "classic" && mode === "easy") || customHas("three");
@@ -111,7 +116,7 @@
   modeSelect.value = mode;
   let challenge = "classic", score = 0, high = 0;
   let customLives = 3, customSeasons = [1,2,3,4,5,6], customStarted = false;
-  let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false};
+  let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false,hideSolved:false};
   let showOnFocus = true, autoFocusInput = false, timelineSpeed = "slow";
   let fullEpisodeListOpened = false, inputWasFocusedOnPointerDown = false;
   try {
@@ -137,6 +142,10 @@
   customSeasonInputs.forEach(el => { el.checked = customSeasons.includes(Number(el.value)); });
   modifierKeys.forEach(key => { customModifiers[key].checked = customFeatures[key]; });
   function updateCustomSummary() {
+    const once=customModifiers.once.checked;
+    hideSolvedRow.hidden=!once;
+    customModifiers.hideSolved.disabled=!once;
+    if(!once)customModifiers.hideSolved.checked=false;
     const selectedSeasons = customSeasonInputs.filter(el => el.checked).map(el => Number(el.value));
     const total = playable.filter(ep => selectedSeasons.includes(seasonNumber(ep))).length;
     const selectedFeatures = [customModifiers.four.checked ? "Four Choices" : "typed answers"];
@@ -145,6 +154,8 @@
     if (customModifiers.reveal.checked) selectedFeatures.push("Reveal");
     if (customModifiers.distort.checked) selectedFeatures.push("Impossible");
     if (customModifiers.once.checked) selectedFeatures.push("no repeats");
+    if (customModifiers.once.checked && customModifiers.hideSolved.checked)
+      selectedFeatures.push("hide correct answers");
     customSummary.textContent = total + " episodes · " + customLivesInput.value + " lives · " + selectedFeatures.join(" + ");
   }
   function saveOptions() {
@@ -187,12 +198,16 @@
     }
     customSeasons = seasons;
     customLives = Math.min(10, Math.max(1, Number(customLivesInput.value) || 3));
-    customFeatures = Object.fromEntries(modifierKeys.map(key => [key, customModifiers[key].checked]));
+    customFeatures = Object.fromEntries(modifierKeys.map(key => [
+      key,key==="hideSolved" ? customModifiers.once.checked&&customModifiers.hideSolved.checked
+        : customModifiers[key].checked
+    ]));
     saveCustom();
     customStarted = true;
     resetGame();
   });
   let lives = 3, answered = 0, gameOver = false, currentRound = null;
+  let solvedEpisodes=new Set();
   let pending = [], previousId = "", selected = null, highlighted = -1, visible = [];
   let currentFrame = 0, revealStage = 1, timelineSelection = -1, timelineOrder = [];
   let choices = [], dailyAnswers = [], dailyGuesses = [], dailyPlan = [], awaitingNext = false;
@@ -757,7 +772,9 @@
   }
 
   function candidateEpisodes() {
-    if (challenge === "custom") return episodes.filter(ep => customSeasons.includes(seasonNumber(ep)));
+    if (challenge === "custom") return episodes.filter(ep =>
+      customSeasons.includes(seasonNumber(ep)) &&
+      (!hideSolvedEnabled() || !solvedEpisodes.has(ep.id)));
     return episodes;
   }
 
@@ -1222,6 +1239,8 @@
     communityleHints=Object.fromEntries((data.guesses||[]).map(g=>[g.id,g.hints]));
     communityleHistory=(data.guesses||[]).map(g=>g.id);
     communityleCompleted=challenge==="communityle"&&data.finished;
+    solvedEpisodes=new Set(hideSolvedEnabled()&&Array.isArray(data.solvedEpisodes)
+      ?data.solvedEpisodes:[]);
     dailyAnswers=(data.history||[]).map(h=>h.correct);
     dailyGuesses=(data.history||[]).map(h=>h.guess);
     dailyPlan=(data.history||[]).map(h=>({id:h.id,url:h.url}));
@@ -1322,6 +1341,7 @@
     score=0;answered=0;lives=challenge==="custom"?customLives:1;gameOver=false;
     awaitingNext=false;showUnmodifiedAnswer=false;
     selected=null;highlighted=-1;visible=[];
+    solvedEpisodes=new Set();
     currentFrame=0;revealStage=1;timelineSelection=-1;
     input.value="";input.disabled=false;button.disabled=false;
     button.textContent="Guess";button.hidden=false;
@@ -1944,6 +1964,8 @@
       failedOperation=null;retryGame.hidden=true;
       if(version!==epoch)return;
       score=result.score;answered=result.answered;lives=result.lives;
+      if(hideSolvedEnabled()&&Array.isArray(result.solvedEpisodes))
+        solvedEpisodes=new Set(result.solvedEpisodes);
       // Re-enable round advancement after the acknowledged server response.
       remoteBusy=false;
       scoreEl.textContent=String(score);setHigh();
@@ -2039,7 +2061,8 @@
 
   function resolveInput() {
     const matches = search(input.value);
-    const candidate = selected || (matches.length === 1 ? matches[0] : null);
+    const candidate = selected && matches.some(ep=>ep.id===selected.id)
+      ?selected:(matches.length === 1 ? matches[0] : null);
     if (!candidate || (challenge === "custom" && !customSeasons.includes(seasonNumber(candidate)))) {
       feedback.textContent = "Select an episode from the list.";
       return;
