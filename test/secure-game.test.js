@@ -459,3 +459,90 @@ test("Custom Game has no public leaderboard, even through direct API calls",asyn
   assert.equal(catalog.boards.some(x=>x.mode.startsWith("custom:")),false);
   assert.equal(db.scores.length,1,"Legacy Custom scores must not be deleted");
 });
+
+
+test("Hide correct answers is only enabled in Custom Game with Every episode once",async()=>{
+  const {configFrom,keyFor}=await import("../src/server/engine.js");
+  const normal=configFrom({challenge:"custom",features:{hideSolved:true}});
+  assert.equal(normal.features.hideSolved,false);
+  const classic=configFrom({challenge:"classic",features:{once:true,hideSolved:true}});
+  assert.equal(classic.features.hideSolved,false);
+  const without=configFrom({challenge:"custom",lives:3,features:{once:true}});
+  const withHide=configFrom({challenge:"custom",lives:3,features:{once:true,hideSolved:true}});
+  assert.equal(withHide.features.hideSolved,true);
+  assert.equal(keyFor(without).endsWith("000001"),true);
+  assert.equal(keyFor(withHide),keyFor(without)+"h");
+});
+
+test("Only correctly identified episodes disappear in Custom Game, even after resume",async()=>{
+  const db=createDb();await setup(db);
+  const settings={challenge:"custom",lives:3,features:{once:true,hideSolved:true}};
+  const game=await start(db,settings);
+  assert.equal(game.solvedEpisodes.length,0);
+  assert.equal(game.revealedEpisode,undefined);
+  const first=privateGame(db,game.session).current.episode;
+  const solved=await call(db,{action:"guess",session:game.session,guess:first,autoNext:true});
+  assert.equal(solved.correct,true);
+  assert.equal(solved.score,1);
+  assert.deepEqual(solved.solvedEpisodes,[first]);
+  assert.equal(solved.revealedEpisode,undefined);
+  assert.equal(solved.round.images[0].startsWith("/api/frame/"),true);
+
+  const resumed=await start(db,settings,game.session);
+  assert.equal(resumed.session,game.session);
+  assert.deepEqual(resumed.solvedEpisodes,[first]);
+  const second=privateGame(db,game.session).current.episode;
+  assert.notEqual(second,first);
+  const rejected=await action(db,{action:"guess",session:game.session,guess:first});
+  assert.equal(rejected.status,400,"An already solved episode must not be accepted again");
+  assert.equal((await call(db,{action:"state",session:game.session})).answered,1);
+
+  // A wrong answer does NOT disappear from the list. Nor does a scene
+  // that was shown but not correctly identified.
+  const wrong=EPISODES.find(id=>id!==first&&id!==second);
+  const missed=await call(db,{action:"guess",session:game.session,guess:wrong});
+  assert.equal(missed.correct,false);
+  assert.equal(missed.lives,2);
+  assert.deepEqual(missed.solvedEpisodes,[first]);
+  assert.equal(missed.awaitingNext,true);
+  const advanced=await call(db,{action:"next",session:game.session});
+  assert.deepEqual(advanced.solvedEpisodes,[first]);
+  assert.equal(advanced.revealedEpisode,undefined);
+  assert.equal(advanced.answered,2);
+  assert.equal(advanced.finished,false);
+});
+
+test("Custom Four Choices excludes previously solved episodes when hide rule is on",async()=>{
+  const db=createDb();await setup(db);
+  const settings={challenge:"custom",lives:3,features:{once:true,hideSolved:true,four:true}};
+  const game=await start(db,settings);
+  const first=privateGame(db,game.session).current.episode;
+  const after=await call(db,{action:"guess",session:game.session,guess:first,autoNext:true});
+  assert.equal(after.correct,true);
+  assert.equal(after.autoAdvanced,true);
+  assert.deepEqual(after.solvedEpisodes,[first]);
+  assert.equal(after.round.choices.includes(first),false);
+  assert.equal(after.round.choices.length,4);
+  assert.equal((await action(db,{action:"guess",session:game.session,guess:first})).status,400);
+});
+
+test("Custom one-time hide mode still finishes after every one of the 110 episodes",async()=>{
+  const db=createDb();await setup(db);
+  const game=await start(db,{challenge:"custom",lives:1,features:{once:true,hideSolved:true}});
+  assert.equal(EPISODES.length,110);
+  for(let i=0;i<EPISODES.length;i++){
+    const answer=privateGame(db,game.session).current.episode;
+    const result=await call(db,{action:"guess",session:game.session,guess:answer,autoNext:true});
+    assert.equal(result.correct,true);
+    assert.equal(result.answered,i+1);
+    assert.equal(result.solvedEpisodes.length,i+1);
+    assert.equal(result.finished,i===EPISODES.length-1);
+    if(i<EPISODES.length-1)assert.equal(result.revealedEpisode,undefined);
+  }
+  assert.equal(new Set(privateGame(db,game.session).history.map(x=>x.episode)).size,110);
+  const post=await leaderboard({request:new Request("https://example.test/api/leaderboard",{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({mode:game.mode,session:game.session,name:"No Public Scores"})
+  }),env:{DB:db}});
+  assert.equal(post.status,400,"Custom games cannot submit a public high score");
+});
