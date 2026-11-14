@@ -21,7 +21,7 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 - A completed, server-verified score of **at least 1 point** is required. Zero-point runs never qualify.
 - Store only the three highest verified results per mode; the third place must be strictly beaten once three entries exist. Equal scores preserve the earlier entry.
 - A qualifying player chooses a nickname of 1–20 characters (letters, digits, spaces, period, underscore, hyphen). No account is needed.
-- Unsolved Community-le rounds show as `Unsolved`, rather than an invented number of guesses.
+- Unsolved Communityle rounds show as `Unsolved`, rather than an invented number of guesses.
 
 ## Interface and replay behavior
 
@@ -29,7 +29,7 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 - In Custom Game, enabling **Every episode once** reveals an optional **Hide correctly guessed episodes** checkbox. If chosen, already correctly identified episodes are filtered out of text autocomplete and numeric episode suggestions, and also stop appearing as Four Choices distractors. Wrong guesses remain available. The source of truth is the server-verified correct-answer history, returned in the API only for this Custom configuration; it is reconstructed after a reconnect and cleared on a new game. All existing screenshot assets and gameplay logic are unchanged, and this Custom variant still has **no public leaderboard**.
 - The extra hide-solved rule adds an `h` suffix to the six-character Custom Game configuration identifier only when enabled, so existing configurations retain their saved personal high-score keys and distinct difficulty settings do not collide.
 - **Season Challenge is retired**: its menu, selector, routes, server game mode and public rankings are disabled. Previously stored season scores are not displayed or accepted through the leaderboard API. The independent **Custom Game** season filter remains available.
-- In the interface, Daily Challenge is labeled "resets daily", and Daily/Community-le show the date without "Berlin" or a reset-hour caption. The underlying puzzles continue to roll over at 06:00 Europe/Berlin, including daylight-saving adjustments.
+- In the interface, Daily Challenge is labeled "resets daily", and Daily/Communityle show the date without "Berlin" or a reset-hour caption. The underlying puzzles continue to roll over at 06:00 Europe/Berlin, including daylight-saving adjustments.
 - The Hall of Fame shows "Website Top 3" without displaying a minimum-score caption or the confusing count of modes with scores. The existing one-point minimum continues to be **enforced by the server**.
 - The game can still resume an **unfinished** session, but a completed regular run is not automatically reopened when the website is visited again. This avoids a Top 3 name prompt for an old score. Daily puzzles retain finished results so they remain shareable; the One Life, 110 completion hall retains verified perfect-run claims.
 - After starting a new game with **Enter** on "Play again", the answer field automatically regains keyboard focus once the next screenshot has loaded, regardless of whether the optional general auto-focus setting is enabled.
@@ -55,7 +55,7 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 - The browser receives a randomly generated image token and never receives the solution to an unanswered round.
 - D1 stores a server-verified game session, each attempt, the current hidden episode, and the leaderboard.
 - \`/api/frame/{session}/{token}\` streams the screenshot from the existing free GitHub Pages image repositories **without revealing the original episode-bearing URL to the visitor**.
-- The server chooses and checks images for all challenge modes. Daily Challenge and Community-le use their own daily puzzles that reset at 06:00 Berlin time.
+- The server chooses and checks images for all challenge modes. Daily Challenge and Communityle use their own daily puzzles that reset at 06:00 Berlin time.
 - \`/api/leaderboard\` reads only the **verified** \`cg_leaderboard\` entries. Old, unverifiable records in the former \`leaderboard\` table are intentionally not imported.
 - \`_routes.json\` invokes the Pages Functions only for \`/api/*\`, keeping normal HTML, CSS, and JavaScript requests outside the Functions quota.
 - GitHub repository history still contains the old frame/episode catalogue. Like any image-guessing game, screenshot matching cannot be prevented; this protection removes direct inspection of the episode ID and simple client-side score spoofing.
@@ -89,4 +89,4 @@ The build script includes only `index.html`, `assets/`, `css/`, `js/episodes.js`
 
 ## Sharing daily results
 
-Daily Challenge is a five-round quiz, not a Wordle puzzle. Its share dialog displays a separate numbered outcome (correct/missed) for each of the five episode screenshots, the overall score out of five, the puzzle date, and Share / Copy buttons. The copied text contains **no episode IDs, titles or images**, only the five binary outcomes, score, date and link to `#/daily`. The dialog automatically appears once per completed session and can always be reopened via its dedicated button. Community-le retains its existing two-number hint share format. Neither daily mode has a public Top 3.
+Daily Challenge is a five-round quiz, not a Wordle puzzle. Its share dialog displays a separate numbered outcome (correct/missed) for each of the five episode screenshots, the overall score out of five, the puzzle date, and Share / Copy buttons. The copied text contains **no episode IDs, titles or images**, only the five binary outcomes, score, date and link to `#/daily`. The dialog automatically appears once per completed session and can always be reopened via its dedicated button. Communityle retains its existing two-number hint share format. Neither daily mode has a public Top 3.
