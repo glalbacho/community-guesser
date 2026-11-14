@@ -20,6 +20,8 @@ test("Daily labels do not show Berlin or a reset hour",()=>{
   assert.doesNotMatch(html,/resets 06:00 Berlin time/);
   assert.doesNotMatch(game,/resets 06:00 Berlin|dailyDate\(\) \+ " \(Berlin\)/);
   assert.match(game,/communityleDate\.textContent = dailyDate\(\);/);
+  assert.match(game,/if \(challenge === "daily"\) message = dailyDate\(\);/);
+  assert.match(game,/progressDetail\.textContent = dailyDate\(\);/);
   // The change is presentational only: server daily puzzles still align worldwide.
   assert.match(engine,/timeZone:"Europe\/Berlin"/);
 });
