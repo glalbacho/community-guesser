@@ -383,3 +383,10 @@ button,select,input{font-family:inherit}
 /* Swipe between the three screenshots on touchscreens; never hijack vertical page scroll. */
 .frame-viewer.swipe-enabled #episode-frame{touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}
 .frame-viewer.swipe-enabled #episode-frame img{-webkit-user-drag:none}
+
+
+/* Dependent Custom Game rules must stay hidden until their prerequisite is on. */
+.custom-modifier[hidden]{display:none!important}
+.custom-modifier.custom-dependent{margin-left:24px;background:#293543;border-color:#5a7088}
+.custom-modifier.custom-dependent small{color:#bdcad9}
+@media(max-width:600px){.custom-modifier.custom-dependent{margin-left:10px}}

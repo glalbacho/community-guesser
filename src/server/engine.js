@@ -32,13 +32,16 @@ export function configFrom(input) {
   if (!seasons.length) throw new Error("Choose at least one season.");
   const f = c.features && typeof c.features==="object" ? c.features : {};
   const features = Object.fromEntries(["four","numbers","three","reveal","distort","once"].map(k=>[k,f[k]===true]));
+  // Hiding solved answers is exclusively a Custom Game sub-option of Once.
+  features.hideSolved=challenge==="custom"&&features.once&&f.hideSolved===true;
   return {challenge,mode,lives,seasons,features};
 }
 export function keyFor(c,date=berlinDate()) {
   switch(c.challenge) {
     case "classic":return "classic:"+c.mode;
     case "custom":return "custom:"+c.lives+":"+c.seasons.join("-")+":"+
-      ["four","numbers","three","reveal","distort","once"].map(k=>c.features[k]?"1":"0").join("");
+      ["four","numbers","three","reveal","distort","once"].map(k=>c.features[k]?"1":"0").join("")+
+      (c.features.hideSolved?"h":"");
     case "daily":return "daily:"+date;
     case "communityle":return "communityle:"+date;
     default:return "challenge:"+c.challenge;
@@ -182,8 +185,10 @@ async function makeRound(db,s) {
   s.previous=episode;
   s.seen.push(episode);
   const frames=chooseFrames(episode,threeEnabled(c)).map(frame=>imageEntry(episode,frame));
+  const solved=c.challenge==="custom"&&c.features.hideSolved
+    ?new Set(s.history.filter(h=>h.correct).map(h=>h.episode)):null;
   const choices=fourEnabled(c)?shuffled([
-    episode,...shuffled(pool.filter(id=>id!==episode)).slice(0,3)
+    episode,...shuffled(pool.filter(id=>id!==episode&&(!solved||!solved.has(id)))).slice(0,3)
   ]):undefined;
   s.current={episode,images:frames,...(choices?{choices}:{})};
 }
@@ -197,7 +202,9 @@ export function publicState(s) {
       id:h.episode,guess:h.guess,correct:h.correct,
       url:h.images[0]?imageUrl(s,h.images[0]):null
     })) : undefined,
-    guesses:s.config.challenge==="communityle"?s.guesses.map(g=>({id:g.id,hints:g.hints})):undefined
+    guesses:s.config.challenge==="communityle"?s.guesses.map(g=>({id:g.id,hints:g.hints})):undefined,
+    solvedEpisodes:s.config.challenge==="custom"&&s.config.features.hideSolved
+      ?s.history.filter(h=>h.correct).map(h=>h.episode):undefined
   };
   if(current){
     result.round={
@@ -300,6 +307,8 @@ export async function action(db,payload) {
   } else {
     if(typeof guess!=="string"||!EPISODE_SET.has(guess)||
       c.challenge==="custom"&&!c.seasons.includes(Number(guess.slice(1,3)))||
+      c.challenge==="custom"&&c.features.hideSolved&&
+        s.history.some(h=>h.correct&&h.episode===guess)||
       s.current.choices&&!s.current.choices.includes(guess))
       return json({error:"Invalid episode selection."},400);
     correct=guess===s.current.episode;
