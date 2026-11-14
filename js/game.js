@@ -2053,7 +2053,7 @@
     event.preventDefault();
     if(refreshDailyAtBoundary())return;
     if (awaitingNext) { advance(); return; }
-    if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(true); return; }
+    if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(); return; }
     if (fourEnabled() || isTimeline() || gameOver) return;
     resolveInput();
   });
