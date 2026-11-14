@@ -4,7 +4,6 @@ import { load, setup as setupGame, json } from "../../src/server/engine.js";
 
 const allowedMode=mode=>typeof mode==="string"&&(
   /^classic:(easy|normal|hard|impossible)$/.test(mode)||
-  /^season:[1-6]$/.test(mode)||
   /^challenge:(four|timeline|episodeTimeline|progressive)$/.test(mode)||
   /^custom:(10|[1-9]):[1-6](?:-[1-6]){0,5}:[01]{6}$/.test(mode)
 );
