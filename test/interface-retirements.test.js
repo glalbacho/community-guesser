@@ -47,3 +47,17 @@ test("Custom Game tracks its own score but cannot display or claim website ranki
   assert.match(game,/function modeHighKey\(\)/);
   assert.match(game,/function setHigh\(\)/);
 });
+
+
+test("Hide-solved Custom option is conditional and removes only verified solved suggestions",()=>{
+  assert.match(html,/id="custom-hide-solved-row" hidden/);
+  assert.match(html,/id="custom-hide-solved"/);
+  assert.match(game,/hideSolvedRow\.hidden=!once/);
+  assert.match(game,/customModifiers\.hideSolved\.disabled=!once/);
+  assert.match(game,/if\(!once\)customModifiers\.hideSolved\.checked=false/);
+  assert.match(game,/!hideSolvedEnabled\(\) \|\| !solvedEpisodes\.has\(ep\.id\)/);
+  assert.match(game,/solvedEpisodes=new Set\(hideSolvedEnabled\(\)&&Array\.isArray\(data\.solvedEpisodes\)/);
+  assert.match(game,/if\(hideSolvedEnabled\(\)&&Array\.isArray\(result\.solvedEpisodes\)\)/);
+  assert.match(game,/solvedEpisodes=new Set\(\);/);
+  assert.match(game,/else if\(challenge!=="custom"\)checkBoard\(finalScore\)/);
+});
