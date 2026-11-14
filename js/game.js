@@ -1161,8 +1161,8 @@
     if(challengeNames[name] && name!=="classic")challenge=name;
     else {
       challenge="classic";
-      // Retired routes (including #/survival) now lead to Classic.
-      if(name==="survival")setRoute("");
+      // Retired routes now lead to Classic without leaving a dead URL.
+      if(name==="survival"||name==="season")setRoute("");
     }
     if(challenge==="custom")customStarted=false;
     resetGame();
