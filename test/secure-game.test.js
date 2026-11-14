@@ -293,7 +293,7 @@ test("Episode Timeline uses three widely separated moments from exactly one epis
     assert.equal(round.timelineSolution,undefined);
     for(const item of round.round.timeline){
       assert.deepEqual(Object.keys(item).sort(),["token","url"]);
-      assert.match(item.url,/^\\/api\\/frame\\/[a-f0-9-]{36}\\/[a-f0-9-]{36}$/);
+      assert.match(item.url,/^\/api\/frame\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/);
     }
     const secret=privateGame(db,round.session).current;
     assert.equal(new Set(secret.timeline.map(x=>x.episode)).size,1);
