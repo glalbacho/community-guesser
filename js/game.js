@@ -63,6 +63,7 @@
   const fourEnabled = () => challenge === "four" || customHas("four");
   const threeEnabled = () => (challenge === "classic" && mode === "easy") || customHas("three");
   const distortedEnabled = () => (challenge === "classic" && mode === "impossible") || customHas("distort");
+  const isTimeline = () => challenge==="timeline" || challenge==="episodeTimeline";
   const openOptions = $("open-options"), optionsPanel = $("options-panel");
   const optionsView = $("options-view"), optionsBack = $("options-back");
   let activeView = "game";
@@ -93,6 +94,7 @@
   const challengeNames = {
     classic: "Classic game", progressive: "Progressive Reveal",
     four: "Four Choices", timeline: "Timeline Challenge",
+    episodeTimeline: "Episode Timeline",
     one110: "One Life, 110",
     season: "Season Challenge", daily: "Daily Challenge", custom: "Custom Game",
     communityle: "Community-le"
@@ -1043,7 +1045,8 @@
       ["classic:hard","Hard Mode"],["classic:impossible","Impossible Mode"],
       ...[1,2,3,4,5,6].map(s=>["season:"+s,"Season "+s]),
       ["challenge:four","Four Choices"],
-      ["challenge:timeline","Timeline Challenge"],["challenge:progressive","Progressive Reveal"]
+      ["challenge:timeline","Timeline Challenge"],["challenge:episodeTimeline","Episode Timeline"],
+      ["challenge:progressive","Progressive Reveal"]
     ];
     const key="custom:"+customLives+":"+customSeasons.slice().sort((a,b)=>a-b).join("-")+":"+customFeatureFlags();
     return [...basic,[key,"Custom Game · saved settings"]];
@@ -1195,9 +1198,9 @@
     seasonLabel.hidden = challenge !== "season";
     challengeTools.hidden = challenge !== "season" && challenge !== "one110" &&
       challenge !== "daily" && challenge !== "custom";
-    frameViewer.hidden = challenge === "timeline" || (challenge === "custom" && !customStarted);
-    timelineBoard.hidden = challenge !== "timeline";
-    textAnswer.hidden = fourEnabled() || challenge === "timeline" ||
+    frameViewer.hidden = isTimeline() || (challenge === "custom" && !customStarted);
+    timelineBoard.hidden = !isTimeline();
+    textAnswer.hidden = fourEnabled() || isTimeline() ||
       (challenge === "custom" && !customStarted);
     fourChoices.hidden = !fourEnabled();
     revealControls.hidden = !revealEnabled();
@@ -1240,7 +1243,7 @@
         :"Challenge complete! Final score: "+score+".");
       return;
     }
-    if(challenge==="timeline"){
+    if(isTimeline()){
       const images=data.round.timeline||[];
       const tokens=images.map(item=>item.token);
       currentRound={id:null,timeline:tokens,
@@ -1351,7 +1354,7 @@
     button.hidden=false;button.textContent="Guess";
     textAnswer.classList.remove("replay-only");
     if(fourEnabled()){fourChoices.hidden=false;textAnswer.hidden=true;}
-    else if(challenge!=="timeline"){fourChoices.hidden=true;textAnswer.hidden=false;}
+    else if(!isTimeline()){fourChoices.hidden=true;textAnswer.hidden=false;}
     closeSuggestions();feedback.textContent="";
     loadServerRound("next");
   }
@@ -1593,7 +1596,7 @@
     return (currentRound?.timelineSolution || []).map(entry=>entry.token);
   }
   function timelineCanReorder() {
-    return challenge==="timeline" && !gameOver && !timelineRevealed && !remoteBusy;
+    return isTimeline() && !gameOver && !timelineRevealed && !remoteBusy;
   }
   function timelineAnimationDuration() {
     // Follow OS reduced-motion preference without changing the saved choice.
@@ -1671,7 +1674,9 @@
     timelineCards.replaceChildren();
     timelineRevealed=false;
     timelineDragging=null;
-    timelineInstruction.textContent="Drag any part of a card into broadcast order, then release it over another position.";
+    timelineInstruction.textContent=challenge==="episodeTimeline"
+      ?"All three screenshots are from the same episode. Drag the scenes into beginning, middle and end order."
+      :"Drag any part of a card into broadcast order, then release it over another position.";
     timelineBoard.classList.remove("solved","incorrect","reordering");
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
@@ -1686,7 +1691,7 @@
       const img=document.createElement("img");
       const stored=currentRound.timelineImages[id];
       img.src=stored;
-      img.alt="Unknown Community episode screenshot";
+      img.alt=challenge==="episodeTimeline"?"Scene from the same Community episode":"Unknown Community episode screenshot";
       img.draggable=false;
       img.setAttribute("draggable","false");
       const caption=document.createElement("span");
@@ -1768,28 +1773,40 @@
     timelineBoard.classList.remove("solved","incorrect");
     if(needsReorder) {
       timelineBoard.classList.add("reordering");
-      timelineInstruction.textContent="Moving the cards into the correct broadcast order…";
+      timelineInstruction.textContent=challenge==="episodeTimeline"
+        ?"Moving the scenes into their correct chronological order…"
+        :"Moving the cards into the correct broadcast order…";
       // First let every card reach its proper position.
       await animateTimelineOrder(actual,true);
     }
-    if(version!==timelineRevealVersion||challenge!=="timeline")return;
+    if(version!==timelineRevealVersion||!isTimeline())return;
     timelineBoard.classList.remove("reordering");
-    timelineInstruction.textContent=correct
-      ?"Perfect! You placed the episodes in the correct order."
-      :"This was the correct broadcast order.";
+    if(challenge==="episodeTimeline"){
+      const episode=currentRound?.id && byId[currentRound.id]
+        ?label(byId[currentRound.id]):"the episode";
+      timelineInstruction.textContent=correct
+        ?"Perfect! These scenes from "+episode+" are in chronological order."
+        :"This was the correct scene order in "+episode+".";
+    }else{
+      timelineInstruction.textContent=correct
+        ?"Perfect! You placed the episodes in the correct order."
+        :"This was the correct broadcast order.";
+    }
     const popDuration=timelineAnimationDuration()===0?0:
       correct ? 90 : Math.max(130,Math.min(360,Math.round(timelineAnimationDuration()*.27)));
     // Show one answer at a time, deliberately left-to-right, only after
     // the positions have settled. Wrong answers turn red, never green.
     for(let i=0;i<timelineCards.children.length;i++) {
-      if(version!==timelineRevealVersion||challenge!=="timeline")return;
+      if(version!==timelineRevealVersion||!isTimeline())return;
       const card=timelineCards.children[i];
       card.disabled=true;
-      card.setAttribute("aria-label","Position "+(i+1)+": "+label(byId[currentRound.timelineAnswerLabels[actual[i]]]));
+      const scene=challenge==="episodeTimeline"?["Beginning","Middle","End"][i]
+        :label(byId[currentRound.timelineAnswerLabels[actual[i]]]);
+      card.setAttribute("aria-label","Position "+(i+1)+": "+scene);
       const caption=card.querySelector(".timeline-handle");
       if(caption) {
         caption.className="timeline-answer";
-        caption.textContent=label(byId[currentRound.timelineAnswerLabels[actual[i]]]);
+        caption.textContent=scene;
       }
       card.classList.add(correct?"is-solved":"is-incorrect");
       if(caption && popDuration>0 && caption.animate){
@@ -1800,14 +1817,14 @@
         if(animation && animation.finished)await animation.finished.catch(()=>{});
       }
     }
-    if(version!==timelineRevealVersion||challenge!=="timeline")return;
+    if(version!==timelineRevealVersion||!isTimeline())return;
     timelineBoard.classList.add(correct?"solved":"incorrect");
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
-    timelineSubmit.textContent=correct?"Next timeline →":"Play again";
+    timelineSubmit.textContent=correct?(challenge==="episodeTimeline"?"Next episode →":"Next timeline →"):"Play again";
   }
   timelineSubmit.addEventListener("click",()=>{
-    if(challenge!=="timeline")return;
+    if(!isTimeline())return;
     if(gameOver){
       if(!timelineSubmit.disabled)resetGame();
       return;
@@ -1838,7 +1855,7 @@
     // button. Four Choices uses that same space after the choices close;
     // Timeline uses its existing Check order button after the reveal.
     restart.hidden = true;
-    if (challenge !== "timeline") {
+    if (!isTimeline()) {
       if (fourEnabled()) {
         fourChoices.hidden = true;
         textAnswer.hidden = false;
@@ -1852,9 +1869,9 @@
     feedback.classList.toggle("is-correct", !message.startsWith("Game over"));
     feedback.textContent = message;
     closeSuggestions();
-    if (!fourEnabled() && challenge !== "timeline") button.disabled = false;
+    if (!fourEnabled() && !isTimeline()) button.disabled = false;
     if (challenge !== "daily" && challenge !== "communityle") {
-      if(challenge==="timeline"){
+      if(isTimeline()){
         // Show the corrected timeline in the same three cards.
         revealTimelineInPlace(!message.startsWith("Game over"));
       }
@@ -1927,8 +1944,8 @@
     remoteBusy=true;button.disabled=true;timelineSubmit.disabled=true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     try{
-      const guess=challenge==="timeline"?timelineOrder.slice():value;
-      const result=await requestGame("guess",{guess,autoNext:challenge!=="timeline"});
+      const guess=isTimeline()?timelineOrder.slice():value;
+      const result=await requestGame("guess",{guess,autoNext:!isTimeline()});
       failedOperation=null;retryGame.hidden=true;
       if(version!==epoch)return;
       score=result.score;answered=result.answered;lives=result.lives;
@@ -1936,7 +1953,7 @@
       remoteBusy=false;
       scoreEl.textContent=String(score);setHigh();
       currentRound.id=result.answer||null;
-      if(challenge==="timeline"){
+      if(isTimeline()){
         currentRound.timelineSolution=result.timelineSolution||[];
         currentRound.timelineAnswerLabels=Object.fromEntries(
           (result.timelineSolution||[]).map(item=>[item.token,item.episode]));
@@ -1988,10 +2005,10 @@
         return;
       }
       if(result.correct){
-        if(challenge==="timeline"){
+        if(isTimeline()){
           revealTimelineInPlace(true);
           timelineSubmit.hidden=false;
-          timelineSubmit.textContent="Next timeline →";
+          timelineSubmit.textContent=challenge==="episodeTimeline"?"Next episode →":"Next timeline →";
           feedback.textContent="Correct! Score: "+score+". Review the order before continuing.";
           return;
         }
@@ -2011,7 +2028,7 @@
           ". "+lives+" "+(lives===1?"life":"lives")+" left.");
         return;
       }
-      const explanation=challenge==="timeline"?"The timeline was rearranged into the correct order.":
+      const explanation=isTimeline()?"The timeline was rearranged into the correct order.":
         "Correct answer: "+label(byId[result.answer]);
       finishGame("Game over! "+explanation+" · Final score: "+score+".",score);
     }catch(error){
@@ -2040,7 +2057,7 @@
     if(refreshDailyAtBoundary())return;
     if (awaitingNext) { advance(); return; }
     if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(); return; }
-    if (fourEnabled() || challenge === "timeline" || gameOver) return;
+    if (fourEnabled() || isTimeline() || gameOver) return;
     resolveInput();
   });
   // Legacy standalone replay control is kept hidden for compatibility.
@@ -2062,7 +2079,7 @@
       return;
     }
     if (challenge === "daily") return;
-    if (challenge === "timeline" && (timelineSubmit.disabled || timelineSubmit.hidden)) return;
+    if (isTimeline() && (timelineSubmit.disabled || timelineSubmit.hidden)) return;
     event.preventDefault();
     resetGame();
   });

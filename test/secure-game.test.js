@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {start, action, setup, EPISODES} from "../src/server/engine.js";
 import {onRequest as leaderboard} from "../functions/api/leaderboard.js";
+import {COMMUNITY_FRAME_NUMBERS} from "../src/server/frames.js";
 
 function createDb() {
   const sessions=new Map(), daily=new Map(), scores=[];
@@ -280,4 +281,92 @@ test("Daily Challenge and Community-le have no website ranking, even via direct 
   const data=await (await leaderboard({request:catalog,env:{DB:db}})).json();
   assert.ok(data.boards.some(b=>b.mode==="classic:normal"));
   assert.equal(data.boards.some(b=>/^(daily|communityle):/.test(b.mode)),false);
+});
+
+test("Episode Timeline uses three widely separated moments from exactly one episode",async()=>{
+  const db=createDb();await setup(db);
+  for(let roundNumber=0;roundNumber<12;roundNumber++){
+    const round=await start(db,{challenge:"episodeTimeline"});
+    assert.equal(round.mode,"challenge:episodeTimeline");
+    assert.equal(round.round.timeline.length,3);
+    assert.equal(round.revealedEpisode,undefined);
+    assert.equal(round.timelineSolution,undefined);
+    for(const item of round.round.timeline){
+      assert.deepEqual(Object.keys(item).sort(),["token","url"]);
+      assert.match(item.url,/^\/api\/frame\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/);
+    }
+    const secret=privateGame(db,round.session).current;
+    assert.equal(new Set(secret.timeline.map(x=>x.episode)).size,1);
+    assert.equal(new Set(secret.timeline.map(x=>x.frame)).size,3);
+    const frames=COMMUNITY_FRAME_NUMBERS[secret.episode];
+    const sorted=secret.timeline.slice().sort((a,b)=>a.frame-b.frame);
+    const positions=sorted.map(x=>frames.indexOf(x.frame)/frames.length);
+    assert.ok(positions[0]>=0.04&&positions[0]<=0.29,"start within first third");
+    assert.ok(positions[1]>=0.38&&positions[1]<=0.62,"middle in central third");
+    assert.ok(positions[2]>=0.71&&positions[2]<=0.96,"end within final third");
+    const state=await call(db,{action:"state",session:round.session});
+    assert.equal(state.timelineSolution,undefined);
+    assert.equal(state.revealedEpisode,undefined);
+  }
+});
+
+test("Episode Timeline securely validates token permutations and reveals only after a guess",async()=>{
+  const db=createDb();await setup(db);
+  const round=await start(db,{challenge:"episodeTimeline"});
+  const secret=privateGame(db,round.session).current;
+  const solution=secret.timeline.slice().sort((a,b)=>a.frame-b.frame).map(x=>x.token);
+  const fake=[solution[0],solution[0],solution[2]];
+  assert.equal((await action(db,{action:"guess",session:round.session,guess:fake})).status,400);
+  assert.equal((await action(db,{action:"guess",session:round.session,guess:solution.map(x=>x.slice(0,-1)+"z")})).status,400);
+  assert.equal((await call(db,{action:"state",session:round.session})).score,0);
+  const wrong=[solution[1],solution[0],solution[2]];
+  const result=await call(db,{action:"guess",session:round.session,guess:wrong});
+  assert.equal(result.correct,false);
+  assert.equal(result.score,0);
+  assert.equal(result.finished,true);
+  assert.equal(result.revealedEpisode,secret.episode);
+  assert.deepEqual(result.timelineSolution.map(x=>x.token),solution);
+  assert.equal((await action(db,{action:"guess",session:round.session,guess:solution})).status,409);
+});
+
+test("Episode Timeline scores correct chronological sequences and preserves its own Top 3",async()=>{
+  const db=createDb();await setup(db);
+  const round=await start(db,{challenge:"episodeTimeline"});
+  const secret=privateGame(db,round.session).current;
+  const solution=secret.timeline.slice().sort((a,b)=>a.frame-b.frame).map(x=>x.token);
+  const result=await call(db,{action:"guess",session:round.session,guess:solution,autoNext:true});
+  assert.equal(result.correct,true);
+  assert.equal(result.score,1);
+  assert.equal(result.awaitingNext,true);
+  assert.equal(result.autoAdvanced,false);
+  assert.deepEqual(result.timelineSolution.map(x=>x.token),solution);
+  const next=await call(db,{action:"next",session:round.session});
+  assert.equal(next.score,1);
+  assert.equal(next.answered,1);
+  assert.equal(next.timelineSolution,undefined);
+  const secret2=privateGame(db,round.session).current;
+  const nextSolution=secret2.timeline.slice().sort((a,b)=>a.frame-b.frame).map(x=>x.token);
+  assert.equal((await call(db,{action:"guess",session:round.session,
+    guess:[nextSolution[1],nextSolution[0],nextSolution[2]]})).finished,true);
+  const posted=await leaderboard({request:new Request("https://example.test/api/leaderboard",{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({mode:"challenge:episodeTimeline",name:"Timeline Winner",session:round.session})
+  }),env:{DB:db}});
+  assert.equal(posted.status,201);
+  assert.equal(db.scores[0].score,1);
+  const board=await (await leaderboard({request:new Request(
+    "https://example.test/api/leaderboard?mode=challenge%3AepisodeTimeline"),env:{DB:db}})).json();
+  assert.equal(board.entries[0].name,"Timeline Winner");
+});
+
+test("Original timeline still sorts three different episodes by broadcast order",async()=>{
+  const db=createDb();await setup(db);
+  const round=await start(db,{challenge:"timeline"});
+  const secret=privateGame(db,round.session).current;
+  assert.equal(new Set(secret.timeline.map(x=>x.episode)).size,3);
+  const ordered=secret.timeline.slice().sort((a,b)=>
+    EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode)).map(x=>x.token);
+  const result=await call(db,{action:"guess",session:round.session,guess:ordered});
+  assert.equal(result.correct,true);
+  assert.equal(result.score,1);
 });

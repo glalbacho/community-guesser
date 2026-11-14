@@ -31,6 +31,14 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 - Previously verified `challenge:one110` score-110 entries from the old leaderboard are automatically included; lower-score historical entries are excluded. The old Top 3 API rejects any new One Life entries and no longer lists that mode.
 - `/api/one110` supports reading pages and registering finished runs. It uses the same D1 database and rate-limit protection, so **no Cloudflare configuration changes are required**.
 
+## Episode Timeline
+
+- **Episode Timeline** appears directly below **Timeline Challenge** in the challenge menu. The original Timeline still orders three *different episodes* by their broadcast order.
+- In Episode Timeline, the server selects **one episode** and three of its already-uploaded screenshots: randomly chosen, well-separated moments from approximately the first, middle and last part of the episode. It shuffles the cards for drag-and-drop or Alt+arrow keyboard ordering.
+- The server checks their **actual frame positions**, awarding one point only for the completely correct beginning → middle → end order. A wrong sequence ends that run, as in the existing Timeline Challenge.
+- The correct order is only returned once the round is answered, when the existing card-reorder animation shows the true sequence and the episode title. The browser receives opaque image tokens until then; no new image uploads are needed.
+- The mode has its **own verified website Top 3**, separate from the original Timeline, with the same minimum-one-point and strict-tiebreak rules.
+
 ## Architecture
 
 - The browser receives a randomly generated image token and never receives the solution to an unanswered round.
