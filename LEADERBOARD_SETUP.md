@@ -25,6 +25,7 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 
 ## Interface and replay behavior
 
+- **Custom Game has no global Top 3**, because players can use different lives, seasons and modifiers. It still tracks its score and personal best locally. Existing Custom leaderboard rows are not publicly listed, and all direct Custom ranking reads/submissions are rejected by the API. No data is deleted.
 - **Season Challenge is retired**: its menu, selector, routes, server game mode and public rankings are disabled. Previously stored season scores are not displayed or accepted through the leaderboard API. The independent **Custom Game** season filter remains available.
 - In the interface, Daily Challenge is labeled "resets daily", and Daily/Community-le show the date without "Berlin" or a reset-hour caption. The underlying puzzles continue to roll over at 06:00 Europe/Berlin, including daylight-saving adjustments.
 - The Hall of Fame shows "Website Top 3" without displaying a minimum-score caption or the confusing count of modes with scores. The existing one-point minimum continues to be **enforced by the server**.

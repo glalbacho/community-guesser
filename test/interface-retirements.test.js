@@ -37,3 +37,13 @@ test("Keyboard replay requests focus once the async game start succeeds",()=>{
   assert.match(game,/focusInputAfterReplay=false;\s*input\.focus\(\);/);
   assert.match(game,/event\.preventDefault\(\);\s*resetGame\(true\);\s*\}\);\s*\/\/ First click/);
 });
+
+
+test("Custom Game tracks its own score but cannot display or claim website rankings",()=>{
+  assert.match(game,/if\(challenge==="custom"\)return;/);
+  assert.match(game,/else if\(challenge!=="custom"\)checkBoard\(finalScore\)/);
+  assert.match(game,/! \/\^\(daily\|communityle\|season\|custom\):\//);
+  assert.doesNotMatch(game,/Custom Game · saved settings/);
+  assert.match(game,/function modeHighKey\(\)/);
+  assert.match(game,/function setHigh\(\)/);
+});
