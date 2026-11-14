@@ -13,6 +13,7 @@ jobs:
           node-version: "22"
       - run: npm test
       - run: node --check js/game.js
+      - run: node --check js/swipe.js
       - run: node --check js/daily-share.js
       - run: npm run build
-      - run: test ! -e dist/src/server/frames.js && test ! -e dist/src/server/engine.js && test ! -e dist/functions && test -e dist/index.html && test -e dist/js/daily-share.js && test -e dist/_routes.json
+      - run: test ! -e dist/src/server/frames.js && test ! -e dist/src/server/engine.js && test ! -e dist/functions && test -e dist/index.html && test -e dist/js/daily-share.js && test -e dist/js/swipe.js && test -e dist/_routes.json
