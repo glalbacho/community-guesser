@@ -22,7 +22,7 @@ export function berlinDate() {
 
 export function configFrom(input) {
   const c = typeof input === "object" && input !== null ? input : {};
-  const challenge = ["classic","season","custom","daily","communityle","one110","four","timeline","progressive"].includes(c.challenge)
+  const challenge = ["classic","season","custom","daily","communityle","one110","four","timeline","episodeTimeline","progressive"].includes(c.challenge)
     ? c.challenge : "classic";
   const mode = ["easy","normal","hard","impossible"].includes(c.mode) ? c.mode : "normal";
   const season = Number.isInteger(c.season) && c.season>=1 && c.season<=6 ? c.season : 1;
@@ -65,6 +65,16 @@ function chooseFrames(episode,three=false) {
     return frames[begin+Math.floor(Math.random()*(end-begin))];
   });
   return [oneOf(frames)];
+}
+function episodeTimelineFrames(episode) {
+  const frames=COMMUNITY_FRAME_NUMBERS[episode];
+  // Widely separated moments, sampled afresh for every round. No new assets.
+  const spans=[[0.05,0.28],[0.39,0.61],[0.72,0.95]];
+  return spans.map(([low,high])=>{
+    const begin=Math.floor(frames.length*low);
+    const end=Math.max(begin+1,Math.ceil(frames.length*high));
+    return frames[begin+Math.floor(Math.random()*(end-begin))];
+  });
 }
 function imageEntry(episode,frame) {return {token:uuid(),episode,frame};}
 function threeEnabled(c) {return c.challenge==="classic"&&c.mode==="easy" ||
@@ -133,6 +143,21 @@ async function makeRound(db,s) {
     s.current={episode:selected.episode,images:[imageEntry(selected.episode,selected.frame)]};
     return;
   }
+  if(c.challenge==="episodeTimeline"){
+    const pool=eligible(c).filter(episode=>COMMUNITY_FRAME_NUMBERS[episode].length>=9);
+    const episode=oneOf(pool);
+    const chronological=episodeTimelineFrames(episode);
+    const items=chronological.map(frame=>imageEntry(episode,frame));
+    let order;
+    if(Math.random()<0.10)order=items.slice();
+    else{
+      order=shuffled(items);
+      if(order.every((entry,i)=>entry.token===items[i].token))
+        [order[0],order[1]]=[order[1],order[0]];
+    }
+    s.current={episode,timeline:order,images:order};
+    return;
+  }
   if(c.challenge==="timeline"){
     const picks=shuffled(eligible(c)).slice(0,3);
     const chronological=picks.slice().sort((a,b)=>EPISODES.indexOf(a)-EPISODES.indexOf(b));
@@ -186,7 +211,9 @@ export function publicState(s) {
     if(s.finished||s.awaitingNext) {
       if(current.episode)result.revealedEpisode=current.episode;
       if(current.timeline)result.timelineSolution=current.timeline.slice()
-        .sort((a,b)=>EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode))
+        .sort((a,b)=>s.config.challenge==="episodeTimeline"
+          ?a.frame-b.frame
+          :EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode))
         .map(im=>({token:im.token,episode:im.episode}));
     }
   }
@@ -260,12 +287,14 @@ export async function action(db,payload) {
       ...(s.finished?{answer:s.current.episode}:{})});
   }
   let correct=false,guess=payload.guess;
-  if(c.challenge==="timeline"){
+  if(c.challenge==="timeline"||c.challenge==="episodeTimeline"){
     const tokens=s.current.timeline.map(x=>x.token);
     if(!Array.isArray(guess)||guess.length!==3||new Set(guess).size!==3||
       !guess.every(token=>tokens.includes(token)))return json({error:"Invalid timeline order."},400);
     const expected=s.current.timeline.slice().sort((a,b)=>
-      EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode)).map(x=>x.token);
+      c.challenge==="episodeTimeline"
+        ?a.frame-b.frame
+        :EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode)).map(x=>x.token);
     correct=guess.every((id,i)=>id===expected[i]);
   } else {
     if(typeof guess!=="string"||!EPISODE_SET.has(guess)||
@@ -293,7 +322,7 @@ export async function action(db,payload) {
   // Normal correct answers can select the next frame in the SAME API call.
   // Timeline and incorrect guesses retain their deliberate reveal/Next step.
   let autoAdvanced=false;
-  if(payload.autoNext===true&&correct&&s.awaitingNext&&c.challenge!=="timeline"){
+  if(payload.autoNext===true&&correct&&s.awaitingNext&&!["timeline","episodeTimeline"].includes(c.challenge)){
     s.awaitingNext=false;s.stage=1;
     await makeRound(db,s);
     autoAdvanced=true;
@@ -301,6 +330,8 @@ export async function action(db,payload) {
   if(!await persist(db,row))return json({error:"Please retry."},409);
   return json({...publicState(s),correct,answer:completedEpisode,autoAdvanced,
     ...(s.current.timeline?{timelineSolution:s.current.timeline.slice()
-      .sort((a,b)=>EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode))
+      .sort((a,b)=>c.challenge==="episodeTimeline"
+        ?a.frame-b.frame
+        :EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode))
       .map(im=>({token:im.token,episode:im.episode}))}:{})});
 }
