@@ -23,6 +23,14 @@ If you are using a custom URL such as \`/community-guesser/\`, verify that the *
 - A qualifying player chooses a nickname of 1–20 characters (letters, digits, spaces, period, underscore, hyphen). No account is needed.
 - Unsolved Community-le rounds show as `Unsolved`, rather than an invented number of guesses.
 
+## Interface and replay behavior
+
+- **Season Challenge is retired**: its menu, selector, routes, server game mode and public rankings are disabled. Previously stored season scores are not displayed or accepted through the leaderboard API. The independent **Custom Game** season filter remains available.
+- In the interface, Daily Challenge is labeled "resets daily", and Daily/Community-le show the date without "Berlin" or a reset-hour caption. The underlying puzzles continue to roll over at 06:00 Europe/Berlin, including daylight-saving adjustments.
+- The Hall of Fame shows "Website Top 3" without displaying a minimum-score caption or the confusing count of modes with scores. The existing one-point minimum continues to be **enforced by the server**.
+- The game can still resume an **unfinished** session, but a completed regular run is not automatically reopened when the website is visited again. This avoids a Top 3 name prompt for an old score. Daily puzzles retain finished results so they remain shareable; the One Life, 110 completion hall retains verified perfect-run claims.
+- After starting a new game with **Enter** on "Play again", the answer field automatically regains keyboard focus once the next screenshot has loaded, regardless of whether the optional general auto-focus setting is enabled.
+
 ## One Life, 110 completion hall
 
 - One Life, 110 is **not a Top 3 leaderboard**. It has its own unranked, unlimited **110 Club** on the One Life game screen. Winners are shown newest first, 50 at a time, with `Show more finishers` to browse the complete list.
