@@ -241,7 +241,12 @@ test("Resume and leaderboard query know a previously submitted session",async()=
   });
   assert.equal(response.status,201);
   const resumed=await start(db,{challenge:"classic",mode:"normal"},game.session);
-  assert.equal(resumed.submitted,true);
+  // A prior completed run must NOT pop up as an unplayed Top 3 offer on reload.
+  assert.notEqual(resumed.session,game.session);
+  assert.equal(resumed.score,0);
+  assert.equal(resumed.answered,0);
+  assert.equal(resumed.finished,false);
+  assert.equal(resumed.submitted,false);
   const query=new Request("https://example.test/api/leaderboard?mode=classic%3Anormal&session="+game.session);
   assert.equal((await (await leaderboard({request:query,env:{DB:db}})).json()).submitted,true);
 });
@@ -369,4 +374,61 @@ test("Original timeline still sorts three different episodes by broadcast order"
   const result=await call(db,{action:"guess",session:round.session,guess:ordered});
   assert.equal(result.correct,true);
   assert.equal(result.score,1);
+});
+
+
+test("Completed, unsubmitted ranked streaks do not reappear on a fresh visit",async()=>{
+  const db=createDb();await setup(db);
+  const game=await start(db,{challenge:"classic",mode:"easy"});
+  const answer=privateGame(db,game.session).current.episode;
+  const correct=await call(db,{action:"guess",session:game.session,guess:answer});
+  assert.equal(correct.score,1);
+  await call(db,{action:"next",session:game.session});
+  const wrong=EPISODES.find(id=>id!==privateGame(db,game.session).current.episode);
+  assert.equal((await call(db,{action:"guess",session:game.session,guess:wrong})).finished,true);
+  assert.equal(db.sessions.get(game.session).submitted,0);
+  const newVisit=await start(db,{challenge:"classic",mode:"easy"},game.session);
+  assert.notEqual(newVisit.session,game.session);
+  assert.equal(newVisit.score,0);
+  assert.equal(newVisit.finished,false);
+  assert.equal(newVisit.submitted,false);
+});
+
+test("Unfinished games still resume; Daily Challenge retains finished results",async()=>{
+  const db=createDb();await setup(db);
+  const classic=await start(db,{challenge:"classic",mode:"normal"});
+  const resumed=await start(db,{challenge:"classic",mode:"normal"},classic.session);
+  assert.equal(resumed.session,classic.session);
+  const daily=await start(db,{challenge:"daily"});
+  for(let n=0;n<5;n++){
+    const answer=privateGame(db,daily.session).current.episode;
+    const guess=EPISODES.find(x=>x!==answer);
+    const result=await call(db,{action:"guess",session:daily.session,guess});
+    if(n===4)assert.equal(result.finished,true);
+    else await call(db,{action:"next",session:daily.session});
+  }
+  const afterRefresh=await start(db,{challenge:"daily"},daily.session);
+  assert.equal(afterRefresh.session,daily.session);
+  assert.equal(afterRefresh.finished,true);
+});
+
+test("Season Challenge is retired in the engine and not available on the leaderboard API",async()=>{
+  const db=createDb();await setup(db);
+  const oldMode="season:3";
+  const startRetired=await start(db,{challenge:"season",season:3});
+  assert.equal(startRetired.challenge,"classic");
+  assert.equal(startRetired.mode,"classic:normal");
+  db.scores.push({id:400,mode:oldMode,name:"Legacy Season Winner",score:12,created_at:1});
+  assert.equal((await leaderboard({request:new Request(
+    "https://example.test/api/leaderboard?mode=season%3A3"),env:{DB:db}})).status,400);
+  assert.equal((await leaderboard({request:new Request("https://example.test/api/leaderboard",{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({mode:oldMode,name:"Fake Winner",session:startRetired.session})
+  }),env:{DB:db}})).status,400);
+  const catalog=await (await leaderboard({request:new Request(
+    "https://example.test/api/leaderboard?catalog=1"),env:{DB:db}})).json();
+  assert.equal(catalog.boards.some(board=>board.mode.startsWith("season:")),false);
+  const custom=await start(db,{challenge:"custom",seasons:[3],lives:2});
+  assert.equal(custom.challenge,"custom");
+  assert.equal(custom.mode.startsWith("custom:2:3:"),true);
 });

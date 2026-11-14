@@ -14,7 +14,6 @@
   const menu = $("challenge-menu"), menuToggle = $("menu-toggle"), menuBackdrop = $("menu-backdrop");
   const menuClose = $("menu-close"), challengeLinks = Array.from(document.querySelectorAll("[data-challenge]"));
   const challengeSubtitle = $("challenge-subtitle"), challengeTools = $("challenge-tools");
-  const seasonLabel = $("season-label"), seasonSelect = $("season-select");
   const progressDetail = $("progress-detail"), revealControls = $("reveal-controls");
   const revealNext = $("reveal-next"), revealLabel = $("reveal-label");
   const textAnswer = $("text-answer"), fourChoices = $("four-choices");
@@ -96,7 +95,7 @@
     four: "Four Choices", timeline: "Timeline Challenge",
     episodeTimeline: "Episode Timeline",
     one110: "One Life, 110",
-    season: "Season Challenge", daily: "Daily Challenge", custom: "Custom Game",
+    daily: "Daily Challenge", custom: "Custom Game",
     communityle: "Community-le"
   };
   const label = ep => ep.id + " " + ep.title;
@@ -110,7 +109,7 @@
     if (["easy", "normal", "hard", "impossible"].includes(savedMode)) mode = savedMode;
   } catch (_) {}
   modeSelect.value = mode;
-  let challenge = "classic", season = 1, score = 0, high = 0;
+  let challenge = "classic", score = 0, high = 0;
   let customLives = 3, customSeasons = [1,2,3,4,5,6], customStarted = false;
   let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false};
   let showOnFocus = true, autoFocusInput = false, timelineSpeed = "slow";
@@ -200,13 +199,14 @@
   let showUnmodifiedAnswer = false;
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
+  let focusInputAfterReplay = false;
   let timelineDragging = null, timelineRevealed = false, timelineRevealVersion = 0;
   let timelineMotionAnimations = [];
   let sessionId = null, remoteBusy = false, hasBooted = false;
   let communityleHints = {}, communityleCompleted = false;
   const sessionStoreKey = () => "community-guesser-session-v2:" + boardKey();
   function gameSettings() {
-    return {challenge,mode,season,lives:customLives,
+    return {challenge,mode,lives:customLives,
       seasons:customSeasons.slice(),features:{...customFeatures}};
   }
   async function requestGame(action, details={}) {
@@ -263,7 +263,6 @@
   // Every mode uses a distinct website ranking. Daily puzzles are date-scoped.
   function boardKey() {
     if (challenge === "classic") return "classic:" + mode;
-    if (challenge === "season") return "season:" + season;
     if (challenge === "custom") return "custom:" + customLives + ":" + customSeasons.slice().sort((a,b)=>a-b).join("-") + ":" + customFeatureFlags();
     if (challenge === "daily") return "daily:" + dailyDate();
     if (challenge === "communityle") return "communityle:" + dailyDate();
@@ -435,7 +434,7 @@
 
   function modeHighKey() {
     return "community-guesser-high-score-" +
-      (challenge === "classic" ? mode : challenge === "season" ? "season-" + season :
+      (challenge === "classic" ? mode :
        challenge === "custom" ? "custom-" + customLives + "-" + customSeasons.join("-") + "-" + customFeatureFlags() : challenge);
   }
   function loadHigh() {
@@ -501,7 +500,7 @@
       state==="present"?"number in the other position":"number not found";
   }
   function renderCommunityle() {
-    communityleDate.textContent = dailyDate() + " · resets 06:00 Berlin";
+    communityleDate.textContent = dailyDate();
     communityleAttempts.textContent = communityleHistory.length + " / 6 guesses";
     communityleGuesses.replaceChildren();
     for (let i = 0; i < 6; i++) {
@@ -756,7 +755,6 @@
   }
 
   function candidateEpisodes() {
-    if (challenge === "season") return episodes.filter(ep => seasonNumber(ep) === season);
     if (challenge === "custom") return episodes.filter(ep => customSeasons.includes(seasonNumber(ep)));
     return episodes;
   }
@@ -1043,7 +1041,6 @@
     const basic=[
       ["classic:easy","Easy Mode"],["classic:normal","Normal Mode"],
       ["classic:hard","Hard Mode"],["classic:impossible","Impossible Mode"],
-      ...[1,2,3,4,5,6].map(s=>["season:"+s,"Season "+s]),
       ["challenge:four","Four Choices"],
       ["challenge:timeline","Timeline Challenge"],["challenge:episodeTimeline","Episode Timeline"],
       ["challenge:progressive","Progressive Reveal"]
@@ -1067,7 +1064,7 @@
       card.className="highscores-card";
       const title=document.createElement("h3"); title.textContent=board.name;
       const caption=document.createElement("p"); caption.className="highscores-card-sub";
-      caption.textContent="Website Top 3 · Minimum 1 point";
+      caption.textContent="Website Top 3";
       card.appendChild(title);card.appendChild(caption);
       if(!board.entries.length){
         const empty=document.createElement("p");empty.className="hs-empty";
@@ -1100,12 +1097,12 @@
       const available=new Map(data.boards.map(entry=>[entry.mode,entry.entries]));
       const basic=publicScoreboards();
       const existing=new Set(basic.map(item=>item[0]));
-      const more=data.boards.filter(entry=>!existing.has(entry.mode)&&! /^(daily|communityle):/.test(entry.mode)&&entry.mode!=="challenge:one110")
+      const more=data.boards.filter(entry=>!existing.has(entry.mode)&&! /^(daily|communityle|season):/.test(entry.mode)&&entry.mode!=="challenge:one110")
         .map(entry=>[entry.mode,publicScoreboardName(entry.mode)]);
       showHighscoreCards([...basic,...more].map(([mode,name])=>({
         mode,name,entries:available.get(mode)||[]
       })));
-      highscoresStatus.textContent="Website Top 3 by mode · "+data.boards.length+" rankings with scores.";
+      highscoresStatus.textContent="Website Top 3 by game mode.";
     }catch(_){
       if(requestVersion!==highscoresFetchVersion||!highscoresOpenState)return;
       highscoresGrid.replaceChildren();
@@ -1113,11 +1110,10 @@
     }
   }
   // Hash routes survive reloads and work on static Cloudflare/GitHub hosting.
-  // Examples: #/daily, #/season/3, #/classic/hard, #/options.
+  // Examples: #/daily, #/episodeTimeline, #/classic/hard, #/options.
   function gameRoute() {
     // Classic is the homepage; its difficulty is already saved in localStorage.
     if(challenge==="classic")return "";
-    if(challenge==="season")return "/season/"+season;
     return "/"+challenge;
   }
   function setRoute(route) {
@@ -1162,12 +1158,11 @@
       try{localStorage.setItem(modeKey,mode);}catch(_){}
       setRoute("");
     }
-    if(name==="season"&&/^[1-6]$/.test(parts[1]))season=Number(parts[1]);
     if(challengeNames[name] && name!=="classic")challenge=name;
     else {
       challenge="classic";
-      // Retired routes (including #/survival) now lead to Classic.
-      if(name==="survival")setRoute("");
+      // Retired routes now lead to Classic without leaving a dead URL.
+      if(name==="survival"||name==="season")setRoute("");
     }
     if(challenge==="custom")customStarted=false;
     resetGame();
@@ -1195,8 +1190,7 @@
     }
     challengeSubtitle.hidden = challenge === "classic";
     challengeSubtitle.textContent = challengeNames[challenge] || "";
-    seasonLabel.hidden = challenge !== "season";
-    challengeTools.hidden = challenge !== "season" && challenge !== "one110" &&
+    challengeTools.hidden = challenge !== "one110" &&
       challenge !== "daily" && challenge !== "custom";
     frameViewer.hidden = isTimeline() || (challenge === "custom" && !customStarted);
     timelineBoard.hidden = !isTimeline();
@@ -1213,7 +1207,6 @@
     restart.hidden = true;
     textAnswer.classList.remove("replay-only");
     feedback.classList.remove("is-wrong","is-correct");
-    seasonSelect.value = String(season);
   }
   function menuPickerMark() {
     challengeLinks.forEach(b => {
@@ -1292,13 +1285,20 @@
       feedback.textContent="";
       input.disabled=false;button.disabled=false;timelineSubmit.disabled=false;
       applyServerRound(response);
+      // The input was disabled while loading. Restore focus after the
+      // new screenshot arrives, specifically for keyboard-driven replays.
+      if(focusInputAfterReplay && !gameOver && !textAnswer.hidden && !input.disabled){
+        focusInputAfterReplay=false;
+        input.focus();
+      }
     }catch(error){
       if(version===epoch){failedOperation={kind:"round",action,extra};showServerFailure(error);}
     }finally{
       if(version===epoch)remoteBusy=false;
     }
   }
-  function resetGame() {
+  function resetGame(focusAfterReplay=false) {
+    focusInputAfterReplay=focusAfterReplay;
     closeCommunityleResult();
     closeDailyResult();
     communityleShowResult.hidden=true;
@@ -1378,17 +1378,8 @@
     resetGame();
     navigateTo("game");
   });
-  seasonSelect.addEventListener("change", () => {
-    const value = Number(seasonSelect.value);
-    if (Number.isInteger(value) && value >= 1 && value <= 6) {
-      season = value;
-      resetGame();
-      navigateTo("game");
-    }
-  });
 
   function episodePool() {
-    if (challenge === "season") return playable.filter(ep => seasonNumber(ep) === season);
     if (challenge === "custom") return playable.filter(ep => customSeasons.includes(seasonNumber(ep)));
     return playable;
   }
@@ -1431,8 +1422,7 @@
       (customHas("once") ? " · " + answered + " / " + episodePool().length : "") +
       " · " + score + " points";
     if (challenge === "one110") message = (answered + 1) + " / " + playable.length + " episodes";
-    if (challenge === "daily") message = dailyDate() + " (Berlin) · " + (answered + 1) + " / 5";
-    if (challenge === "season") message = episodePool().length + " episodes in this season";
+    if (challenge === "daily") message = dailyDate();
     progressDetail.textContent = message;
     if (revealEnabled()) {
       revealLabel.textContent = "Reveal " + revealStage + " / 5 · " + (6-revealStage) + " points";
@@ -1896,9 +1886,9 @@
     revealControls.hidden = true;
     textAnswer.hidden = true;
     fourChoices.hidden = true;
-    const summary = "Daily Challenge complete: " + score + " / 5 correct. Next challenge at 06:00 Berlin time.";
+    const summary = "Daily Challenge complete: " + score + " / 5 correct. Come back tomorrow for the next challenge.";
     feedback.textContent = summary;
-    progressDetail.textContent = dailyDate() + " (Berlin) · 5 / 5";
+    progressDetail.textContent = dailyDate();
     restart.hidden = true;
     showDailyAnswerReveal();
     dailyResultAction.hidden=false;
@@ -2053,8 +2043,7 @@
   function resolveInput() {
     const matches = search(input.value);
     const candidate = selected || (matches.length === 1 ? matches[0] : null);
-    if (!candidate || (challenge === "season" && seasonNumber(candidate) !== season) ||
-      (challenge === "custom" && !customSeasons.includes(seasonNumber(candidate)))) {
+    if (!candidate || (challenge === "custom" && !customSeasons.includes(seasonNumber(candidate)))) {
       feedback.textContent = "Select an episode from the list.";
       return;
     }
@@ -2089,7 +2078,7 @@
     if (challenge === "daily") return;
     if (isTimeline() && (timelineSubmit.disabled || timelineSubmit.hidden)) return;
     event.preventDefault();
-    resetGame();
+    resetGame(true);
   });
   // First click only focuses the field. A subsequent click while it is
   // already focused explicitly opens the full episode picker.

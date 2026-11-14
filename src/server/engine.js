@@ -22,10 +22,9 @@ export function berlinDate() {
 
 export function configFrom(input) {
   const c = typeof input === "object" && input !== null ? input : {};
-  const challenge = ["classic","season","custom","daily","communityle","one110","four","timeline","episodeTimeline","progressive"].includes(c.challenge)
+  const challenge = ["classic","custom","daily","communityle","one110","four","timeline","episodeTimeline","progressive"].includes(c.challenge)
     ? c.challenge : "classic";
   const mode = ["easy","normal","hard","impossible"].includes(c.mode) ? c.mode : "normal";
-  const season = Number.isInteger(c.season) && c.season>=1 && c.season<=6 ? c.season : 1;
   const lives = Number.isInteger(c.lives) && c.lives>=1 && c.lives<=10 ? c.lives : 3;
   const seasons = Array.isArray(c.seasons)
     ? [...new Set(c.seasons.filter(n=>Number.isInteger(n)&&n>=1&&n<=6))].sort((a,b)=>a-b)
@@ -33,12 +32,11 @@ export function configFrom(input) {
   if (!seasons.length) throw new Error("Choose at least one season.");
   const f = c.features && typeof c.features==="object" ? c.features : {};
   const features = Object.fromEntries(["four","numbers","three","reveal","distort","once"].map(k=>[k,f[k]===true]));
-  return {challenge,mode,season,lives,seasons,features};
+  return {challenge,mode,lives,seasons,features};
 }
 export function keyFor(c,date=berlinDate()) {
   switch(c.challenge) {
     case "classic":return "classic:"+c.mode;
-    case "season":return "season:"+c.season;
     case "custom":return "custom:"+c.lives+":"+c.seasons.join("-")+":"+
       ["four","numbers","three","reveal","distort","once"].map(k=>c.features[k]?"1":"0").join("");
     case "daily":return "daily:"+date;
@@ -47,7 +45,6 @@ export function keyFor(c,date=berlinDate()) {
   }
 }
 export function eligible(c) {
-  if(c.challenge==="season")return EPISODES.filter(e=>Number(e.slice(1,3))===c.season);
   if(c.challenge==="custom")return EPISODES.filter(e=>c.seasons.includes(Number(e.slice(1,3))));
   return EPISODES;
 }
@@ -225,7 +222,11 @@ export async function start(db,settings,resumeId) {
   if(resumeId){
     const existing=await load(db,resumeId);
     if(existing?.mode===mode&&existing.state.config.challenge===config.challenge&&
-      existing.state.mode===mode&&now()-existing.updated_at<7*86400e3)
+      existing.state.mode===mode&&now()-existing.updated_at<7*86400e3&&
+      // Completed regular games must never reopen as a new high-score offer
+      // simply because the user visited or refreshed the website.
+      (!existing.state.finished||config.challenge==="daily"||
+        config.challenge==="communityle"||config.challenge==="one110"))
       return {...publicState(existing.state),submitted:existing.submitted===1};
   }
   const s={id:uuid(),config,date,mode,score:0,lives:config.challenge==="custom"?config.lives:1,
@@ -298,7 +299,6 @@ export async function action(db,payload) {
     correct=guess.every((id,i)=>id===expected[i]);
   } else {
     if(typeof guess!=="string"||!EPISODE_SET.has(guess)||
-      c.challenge==="season"&&Number(guess.slice(1,3))!==c.season||
       c.challenge==="custom"&&!c.seasons.includes(Number(guess.slice(1,3)))||
       s.current.choices&&!s.current.choices.includes(guess))
       return json({error:"Invalid episode selection."},400);
