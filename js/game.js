@@ -1319,6 +1319,7 @@
     inputWasFocusedOnPointerDown=false;
     ++epoch;
     currentRound=null;sessionId=null;remoteBusy=false;
+    frameViewer.classList.remove("swipe-enabled");
     boardAlreadySubmitted=false;failedOperation=null;retryGame.hidden=true;
     pending=[];previousId="";
     score=0;answered=0;lives=challenge==="custom"?customLives:1;gameOver=false;
@@ -1443,6 +1444,7 @@
     const round = currentRound, frame = round.frames[currentFrame];
     const easy = threeEnabled() && round.frames.length === 3;
     frameNavigation.hidden = !easy;
+    frameViewer.classList.toggle("swipe-enabled",easy);
     if (easy) {
       frameCounter.textContent = (currentFrame + 1) + " / 3";
       previousFrameButton.disabled = currentFrame === 0;
@@ -1558,6 +1560,12 @@
   });
   previousFrameButton.addEventListener("click", () => moveFrame(-1));
   nextFrameButton.addEventListener("click", () => moveFrame(1));
+  // Only Easy Mode and Custom Game's Three screenshots feature use swiping.
+  // Retain the same three frames after a wrong answer so users can review all.
+  window.COMMUNITY_ATTACH_SWIPE(imageBox,
+    () => !frameViewer.hidden && threeEnabled() && currentRound?.frames?.length===3
+      ? currentRound : null,
+    direction => moveFrame(direction));
   revealNext.addEventListener("click", async () => {
     if (!revealEnabled() || gameOver || awaitingNext || revealStage >= 5 || remoteBusy) return;
     remoteBusy=true;revealNext.disabled=true;
