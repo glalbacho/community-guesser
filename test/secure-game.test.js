@@ -432,3 +432,30 @@ test("Season Challenge is retired in the engine and not available on the leaderb
   assert.equal(custom.challenge,"custom");
   assert.equal(custom.mode.startsWith("custom:2:3:"),true);
 });
+
+
+test("Custom Game has no public leaderboard, even through direct API calls",async()=>{
+  const db=createDb();await setup(db);
+  const mode="custom:3:1-3:001000";
+  // Preserve old verified records in storage, but no longer expose them.
+  db.scores.push({id:501,mode,name:"Old Custom Winner",score:42,created_at:1});
+  const get=new Request("https://example.test/api/leaderboard?mode="+encodeURIComponent(mode));
+  assert.equal((await leaderboard({request:get,env:{DB:db}})).status,400);
+  const custom=await start(db,{
+    challenge:"custom",lives:3,seasons:[1,3],features:{three:true}
+  });
+  assert.equal(custom.challenge,"custom");
+  assert.equal(custom.round.images.length,3);
+  assert.ok(custom.mode.startsWith("custom:3:1-3:"));
+  const post=new Request("https://example.test/api/leaderboard",{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({mode:custom.mode,name:"New Winner",session:custom.session})
+  });
+  assert.equal((await leaderboard({request:post,env:{DB:db}})).status,400);
+  const catalog=await (await leaderboard({
+    request:new Request("https://example.test/api/leaderboard?catalog=1"),
+    env:{DB:db}
+  })).json();
+  assert.equal(catalog.boards.some(x=>x.mode.startsWith("custom:")),false);
+  assert.equal(db.scores.length,1,"Legacy Custom scores must not be deleted");
+});
