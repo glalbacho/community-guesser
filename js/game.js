@@ -1821,7 +1821,7 @@
     timelineBoard.classList.add(correct?"solved":"incorrect");
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
-    timelineSubmit.textContent=correct?"Next timeline →":"Play again";
+    timelineSubmit.textContent=correct?(challenge==="episodeTimeline"?"Next episode →":"Next timeline →"):"Play again";
   }
   timelineSubmit.addEventListener("click",()=>{
     if(!isTimeline())return;
@@ -2008,7 +2008,7 @@
         if(isTimeline()){
           revealTimelineInPlace(true);
           timelineSubmit.hidden=false;
-          timelineSubmit.textContent="Next timeline →";
+          timelineSubmit.textContent=challenge==="episodeTimeline"?"Next episode →":"Next timeline →";
           feedback.textContent="Correct! Score: "+score+". Review the order before continuing.";
           return;
         }
