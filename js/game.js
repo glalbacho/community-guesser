@@ -1422,7 +1422,7 @@
       (customHas("once") ? " · " + answered + " / " + episodePool().length : "") +
       " · " + score + " points";
     if (challenge === "one110") message = (answered + 1) + " / " + playable.length + " episodes";
-    if (challenge === "daily") message = dailyDate() + " · " + (answered + 1) + " / 5";
+    if (challenge === "daily") message = dailyDate();
     progressDetail.textContent = message;
     if (revealEnabled()) {
       revealLabel.textContent = "Reveal " + revealStage + " / 5 · " + (6-revealStage) + " points";
@@ -1888,7 +1888,7 @@
     fourChoices.hidden = true;
     const summary = "Daily Challenge complete: " + score + " / 5 correct. Come back tomorrow for the next challenge.";
     feedback.textContent = summary;
-    progressDetail.textContent = dailyDate() + " · 5 / 5";
+    progressDetail.textContent = dailyDate();
     restart.hidden = true;
     showDailyAnswerReveal();
     dailyResultAction.hidden=false;
