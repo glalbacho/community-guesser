@@ -1587,14 +1587,17 @@
     if (event.altKey || event.ctrlKey || event.metaKey || menu.classList.contains("open")) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     if (!threeEnabled() || !currentRound) return;
-    // Left/right browse screenshots even while the answer input is focused.
-    // The input text, selected episode and suggestions are left untouched.
+    // Navigate screenshots while typing, but at the first/last image
+    // let outward arrows move the text cursor normally in the input.
     const target=event.target;
     if(target && target.closest &&
        target.closest("textarea, select, [contenteditable=true]"))return;
     if(target && target.closest && target.closest("input") && target!==input)return;
+    const direction=event.key==="ArrowRight"?1:-1;
+    const next=currentFrame+direction;
+    if(target===input && (next<0 || next>=currentRound.frames.length))return;
     event.preventDefault();
-    moveFrame(event.key === "ArrowRight" ? 1 : -1);
+    moveFrame(direction);
   });
   function buildChoices() {
     choices = Array.isArray(currentRound?.choices) ? currentRound.choices.slice() : [];
