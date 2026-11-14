@@ -199,6 +199,7 @@
   let showUnmodifiedAnswer = false;
   let communityleHistory = [], communityleSolution = null;
   let epoch = 0;
+  let focusInputAfterReplay = false;
   let timelineDragging = null, timelineRevealed = false, timelineRevealVersion = 0;
   let timelineMotionAnimations = [];
   let sessionId = null, remoteBusy = false, hasBooted = false;
@@ -1284,13 +1285,20 @@
       feedback.textContent="";
       input.disabled=false;button.disabled=false;timelineSubmit.disabled=false;
       applyServerRound(response);
+      // The input was disabled while loading. Restore focus after the
+      // new screenshot arrives, specifically for keyboard-driven replays.
+      if(focusInputAfterReplay && !gameOver && !textAnswer.hidden && !input.disabled){
+        focusInputAfterReplay=false;
+        input.focus();
+      }
     }catch(error){
       if(version===epoch){failedOperation={kind:"round",action,extra};showServerFailure(error);}
     }finally{
       if(version===epoch)remoteBusy=false;
     }
   }
-  function resetGame() {
+  function resetGame(focusAfterReplay=false) {
+    focusInputAfterReplay=focusAfterReplay;
     closeCommunityleResult();
     closeDailyResult();
     communityleShowResult.hidden=true;
@@ -2045,7 +2053,7 @@
     event.preventDefault();
     if(refreshDailyAtBoundary())return;
     if (awaitingNext) { advance(); return; }
-    if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(); return; }
+    if (gameOver && challenge !== "daily" && challenge !== "communityle") { resetGame(true); return; }
     if (fourEnabled() || isTimeline() || gameOver) return;
     resolveInput();
   });
@@ -2070,7 +2078,7 @@
     if (challenge === "daily") return;
     if (isTimeline() && (timelineSubmit.disabled || timelineSubmit.hidden)) return;
     event.preventDefault();
-    resetGame();
+    resetGame(true);
   });
   // First click only focuses the field. A subsequent click while it is
   // already focused explicitly opens the full episode picker.
