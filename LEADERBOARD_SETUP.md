@@ -70,6 +70,12 @@ The build script includes only `index.html`, `assets/`, `css/`, `js/episodes.js`
 - D1 maintains sliding time-window style fixed buckets with hashed client IP + time period. Limits: 600 game API requests per five minutes, 80 starts per five minutes, 12 high-score submissions and 240 leaderboard reads per five minutes. The API returns 429 with Retry-After on excess. These limits are a low-cost abuse deterrent, not a replacement for Cloudflare edge/WAF protection; very large distributed floods may still exhaust quotas.
 - The image proxy remains unrestricted to avoid extra D1 round trips for image loading; randomly generated session and frame tokens make unguided guessing impractical.
 
+## Touch screenshot navigation
+
+- On phones and tablets, **Classic Easy** and **Custom Game with Three screenshots** allow swiping across the screenshot itself: swipe left for the next image, swipe right for the previous image.
+- Existing on-screen arrows and keyboard Left/Right navigation remain available, including after a wrong guess. Swiping never goes before the first or beyond the third screenshot.
+- Horizontal gestures require at least 45px travel and must dominate vertical motion; taps, pinch gestures and normal vertical page scrolling are unaffected. Other challenge modes, especially both Timeline modes, do not use screenshot swiping.
+
 ## Sharing daily results
 
 Daily Challenge is a five-round quiz, not a Wordle puzzle. Its share dialog displays a separate numbered outcome (correct/missed) for each of the five episode screenshots, the overall score out of five, the puzzle date, and Share / Copy buttons. The copied text contains **no episode IDs, titles or images**, only the five binary outcomes, score, date and link to `#/daily`. The dialog automatically appears once per completed session and can always be reopened via its dedicated button. Community-le retains its existing two-number hint share format. Neither daily mode has a public Top 3.

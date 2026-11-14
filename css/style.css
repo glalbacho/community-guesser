@@ -378,3 +378,8 @@ button,select,input{font-family:inherit}
 .one110-hall-more{background:#3b516e;border:1px solid #7794bb;border-radius:9px;color:#f0f5ff;padding:10px 18px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;margin:12px auto 0;display:block}
 .one110-hall-more:disabled{opacity:.6;cursor:wait}
 @media(max-width:650px){.one110-hall{padding:17px 14px}.one110-hall-list{grid-template-columns:1fr}.one110-hall-trophy{font-size:29px}}
+
+
+/* Swipe between the three screenshots on touchscreens; never hijack vertical page scroll. */
+.frame-viewer.swipe-enabled #episode-frame{touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}
+.frame-viewer.swipe-enabled #episode-frame img{-webkit-user-drag:none}
