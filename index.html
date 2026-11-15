@@ -8,6 +8,7 @@
   <meta name="description" content="Guess a Community episode from screenshots across all six seasons.">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/meme.css">
 </head>
 <body>
   <div class="page">
@@ -29,6 +30,7 @@
         <button type="button" data-challenge="custom" class="challenge-link custom-menu-link"><span>+ Custom Game</span><small>Choose seasons and 1–10 lives</small></button>
       </nav>
       <button type="button" id="show-all-highscores" class="sidebar-options highscores-nav">🏆 &nbsp; All High Scores</button>
+      <button type="button" id="open-meme" class="sidebar-options" aria-controls="meme-view">✦ &nbsp; Make it a Meme</button>
       <button type="button" id="open-options" class="sidebar-options" aria-controls="options-view">⚙ &nbsp; Options</button>
 
     </aside>
@@ -121,6 +123,7 @@
             <option value="impossible">Impossible Mode</option>
           </select>
         </div>
+        <div class="meme-shortcut"><button type="button" id="meme-from-game">✦ Make it a Meme with this frame</button></div>
         <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
         <button type="button" id="retry-game" class="retry-game" hidden>↻ Retry connection</button>
         <button type="button" id="restart-challenge" class="restart-challenge" hidden>Play again</button>
@@ -237,10 +240,46 @@
       <div id="highscores-grid" class="highscores-grid"></div>
       <button type="button" id="highscores-refresh" class="highscores-refresh">Refresh rankings</button>
     </section>
+    <section id="meme-view" class="meme-view" aria-label="Make it a Meme studio" hidden>
+      <div class="meme-top">
+        <div>
+          <h2>Make it a Meme</h2>
+          <p>Turn Community screenshots into memes or a four-panel comic. No guesses, no scores — just make something and save it.</p>
+        </div>
+        <button type="button" id="meme-back" class="meme-back">← Back to game</button>
+      </div>
+      <div class="meme-studio">
+        <div class="meme-toolbar">
+          <div class="meme-layout-picker" aria-label="Meme layout">
+            <button type="button" data-meme-layout="1" class="active" aria-pressed="true">Single frame</button>
+            <button type="button" data-meme-layout="4" aria-pressed="false">4-frame comic</button>
+          </div>
+          <button type="button" id="meme-random" class="meme-random">↻ New random frames</button>
+          <label for="meme-style">Text style
+            <select id="meme-style">
+              <option value="classic">Classic white meme text</option>
+              <option value="bars">White caption bars</option>
+            </select>
+          </label>
+        </div>
+        <div class="meme-workbench">
+          <div class="meme-preview-wrap">
+            <p class="meme-preview-label">Live preview</p>
+            <canvas id="meme-canvas" width="1200" height="675" role="img" aria-label="Meme with your Community screenshot and captions"></canvas>
+          </div>
+          <div id="meme-fields" class="meme-fields" aria-label="Meme captions"></div>
+        </div>
+        <div class="meme-actions">
+          <button type="button" class="meme-download" id="meme-download" disabled>↓ Download PNG</button>
+          <p id="meme-status" class="meme-status" role="status" aria-live="polite">Choose a frame and add your caption.</p>
+        </div>
+      </div>
+    </section>
   </div>
   <script src="js/episodes.js"></script>
   <script src="js/daily-share.js"></script>
   <script src="js/swipe.js"></script>
   <script src="js/game.js"></script>
+  <script src="js/meme.js"></script>
 </body>
 </html>
