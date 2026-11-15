@@ -45,6 +45,8 @@
   const highscoresStatus = $("highscores-status"), highscoresOpen = $("show-all-highscores");
   const highscoresBack = $("highscores-back"), highscoresRefresh = $("highscores-refresh");
   const gameView = document.querySelector("main.game");
+  const memeView = $("meme-view"), memeOpen = $("open-meme");
+  const memeFromGame = $("meme-from-game"), memeBack = $("meme-back");
   let highscoresOpenState = false, highscoresFetchVersion = 0;
   const customSetup = $("custom-setup"), customLivesInput = $("custom-lives");
   const customLivesDisplay = $("custom-lives-display");
@@ -1152,17 +1154,20 @@
     gameView.hidden=view!=="game";
     highscoresView.hidden=view!=="highscores";
     optionsView.hidden=view!=="options";
+    memeView.hidden=view!=="meme";
     highscoresOpenState=view==="highscores";
     if(view!=="highscores")highscoresFetchVersion++;
     openMenu(false);
     setRoute(view==="game"?gameRoute():"/"+view);
     if(view==="highscores")loadAllHighscores();
+    if(view==="meme")window.dispatchEvent(new Event("community:meme-open"));
   }
   function restoreRoute() {
     const raw=typeof window.location?.hash==="string"?window.location.hash.slice(1):"";
     const parts=raw.replace(/^\//,"").split("/");
     const name=parts[0];
-    if(name==="highscores"||name==="options"){
+    if(name==="highscores"||name==="options"||name==="meme"){
+      if(name==="meme"&&!hasBooted)resetGame();
       navigateTo(name);
       return;
     }
@@ -1181,7 +1186,7 @@
     if(challenge==="custom")customStarted=false;
     resetGame();
     activeView="game";
-    gameView.hidden=false;highscoresView.hidden=true;optionsView.hidden=true;
+    gameView.hidden=false;highscoresView.hidden=true;optionsView.hidden=true;memeView.hidden=true;
   }
   if(typeof window.addEventListener==="function")
     window.addEventListener("popstate",restoreRoute);
@@ -1189,6 +1194,21 @@
   highscoresOpen.addEventListener("click",()=>toggleHighscores(true));
   highscoresBack.addEventListener("click",()=>toggleHighscores(false));
   highscoresRefresh.addEventListener("click",()=>{if(highscoresOpenState)loadAllHighscores();});
+  memeOpen.addEventListener("click",()=>navigateTo("meme"));
+  memeBack.addEventListener("click",()=>navigateTo("game"));
+  memeFromGame.addEventListener("click",()=>{
+    // Timeline rounds display three cards, all other challenges show one
+    // current frame (or the selected Easy-mode frame) in the viewer.
+    const source=isTimeline()
+      ?timelineCards.querySelector("img")
+      :imageBox.querySelector("canvas, img");
+    if(!source){
+      feedback.textContent="Wait until a screenshot is visible before making a meme.";
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("community:meme-import",{detail:{source}}));
+    navigateTo("meme");
+  });
 
   function updateShell() {
     menuPickerMark();
