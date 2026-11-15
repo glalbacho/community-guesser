@@ -390,3 +390,11 @@ button,select,input{font-family:inherit}
 .custom-modifier.custom-dependent{margin-left:24px;background:#293543;border-color:#5a7088}
 .custom-modifier.custom-dependent small{color:#bdcad9}
 @media(max-width:600px){.custom-modifier.custom-dependent{margin-left:10px}}
+
+/* Optional Episode Timeline hint; reveals the episode, never card order. */
+.timeline-episode-hint{display:flex;align-items:center;justify-content:center;margin:0 auto 15px;gap:12px;flex-wrap:wrap}
+.timeline-episode-hint[hidden],.timeline-episode-name[hidden],.timeline-episode-button[hidden]{display:none!important}
+.timeline-episode-button{background:#2c3440;border:1px solid #7599cb;color:#e4efff;border-radius:10px;padding:9px 17px;font-size:13px;font-weight:700;cursor:pointer}
+.timeline-episode-button:hover:not(:disabled){background:#384b63}
+.timeline-episode-button:disabled{opacity:.5;cursor:wait}
+.timeline-episode-name{margin:0;font-size:15px;font-weight:700;color:#dceaff}
