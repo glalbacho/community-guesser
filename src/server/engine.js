@@ -209,6 +209,8 @@ export function publicState(s) {
   if(current){
     result.round={
       images:current.images.map(im=>imageUrl(s,im)),
+      ...(s.config.challenge==="episodeTimeline"&&current.episodeHintShown
+        ?{episodeHint:current.episode}:{}),
       ...(current.choices?{choices:current.choices}:{}),
       ...(current.timeline?{timeline:current.timeline.map(im=>({token:im.token,url:imageUrl(s,im)}))}:{})
     };
@@ -264,6 +266,16 @@ export async function action(db,payload) {
     return json({error:"The daily puzzle has reset. Start today's game."},409);
   if(payload.action==="state")return json({...publicState(s),submitted:row.submitted===1});
   if(s.finished)return json({error:"This game is finished.",...publicState(s),submitted:row.submitted===1},409);
+  if(payload.action==="episodeHint"){
+    // Only reveal the episode's identity, never its internal scene order.
+    if(c.challenge!=="episodeTimeline"||!s.current||s.awaitingNext)
+      return json({error:"Episode hint is unavailable."},409);
+    if(!s.current.episodeHintShown){
+      s.current.episodeHintShown=true;
+      if(!await persist(db,row))return json({error:"Please retry."},409);
+    }
+    return json({episode:s.current.episode});
+  }
   if(payload.action==="reveal"){
     if(!revealEnabled(c)||s.awaitingNext||s.stage>=5)return json({error:"Cannot reveal now."},409);
     s.stage++;
