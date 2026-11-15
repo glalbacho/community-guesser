@@ -1,0 +1,55 @@
+/* Standalone Make it a Meme studio: separate from all scoreboards. */
+.meme-view{width:min(100% - 32px,1120px);margin:12px auto 72px;flex:1;color:var(--fg)}
+.meme-view[hidden]{display:none!important}
+.meme-top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:10px 0 26px}
+.meme-top h2{font-size:clamp(25px,3.2vw,37px);margin:6px 0 7px}
+.meme-top p{color:var(--muted);margin:0;font-size:14px;line-height:1.5;max-width:650px}
+.meme-back{border:1px solid #51535c;background:#292b31;color:#f1f2f5;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer;flex-shrink:0}
+.meme-back:hover{background:#34373f}
+.meme-studio{border:1px solid #393d47;background:#24262b;border-radius:17px;padding:22px;box-shadow:0 15px 32px rgba(0,0,0,.18)}
+.meme-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:19px}
+.meme-layout-picker{display:flex;border:1px solid #444855;border-radius:11px;overflow:hidden;background:#1b1d21}
+.meme-layout-picker button{border:0;background:transparent;color:#c9cbd2;padding:11px 17px;font-size:14px;font-weight:700;cursor:pointer}
+.meme-layout-picker button.active{background:#8cb9ff;color:#111922}
+.meme-layout-picker button:hover:not(.active){background:#31343b}
+.meme-random{border:1px solid #545861;border-radius:11px;background:#363941;color:#fff;padding:11px 16px;font-weight:700;cursor:pointer}
+.meme-random:hover:not(:disabled){background:#454953}
+.meme-toolbar label{display:flex;align-items:center;gap:9px;margin-left:auto;color:#bfc2cb;font-size:13px;font-weight:700}
+.meme-toolbar select{background:#191b1f;color:#fff;border:1px solid #555a66;border-radius:9px;padding:10px;cursor:pointer}
+.meme-workbench{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(240px,.9fr);align-items:start;gap:23px}
+.meme-preview-wrap{background:#17191e;border:1px solid #3a3e48;border-radius:13px;padding:13px;min-width:0}
+.meme-preview-wrap canvas{display:block;width:100%;height:auto;margin:auto;background:#151619}
+.meme-preview-label{margin:0 0 12px;color:#adb1bd;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+.meme-fields{display:grid;gap:13px;min-width:0;max-height:720px;overflow-y:auto;padding-right:3px}
+.meme-caption-group{min-width:0;border:1px solid #444852;border-radius:12px;padding:14px;background:#1d2025}
+.meme-caption-group legend{padding:0 7px;font-weight:700;font-size:13px;color:#dce6f6}
+.meme-caption-group label{display:block;color:#b8bdc7;font-size:12px;font-weight:700;margin-top:8px}
+.meme-caption-group textarea{display:block;width:100%;min-height:64px;margin-top:6px;resize:vertical;border:1px solid #505563;background:#2d3037;color:#fff;border-radius:8px;padding:9px 10px;font:inherit;font-size:14px;line-height:1.35}
+.meme-caption-group textarea:focus{outline:2px solid #8cb9ff;outline-offset:1px}
+.meme-actions{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:20px}
+.meme-download{padding:13px 22px;border:0;background:#8cb9ff;color:#0e1828;border-radius:11px;font-size:15px;font-weight:800;cursor:pointer}
+.meme-download:hover:not(:disabled){background:#aad0ff}
+.meme-download:disabled,.meme-random:disabled{opacity:.48;cursor:not-allowed}
+.meme-status{color:#adb6c2;font-size:13px;margin:0;flex:1}
+.meme-status.is-error{color:#ffaaa7}
+.meme-shortcut{margin:16px auto 6px;display:flex;justify-content:center}
+.meme-shortcut button{background:transparent;border:1px solid #697b96;color:#d2e4ff;border-radius:10px;padding:10px 15px;cursor:pointer;font-size:13px;font-weight:700}
+.meme-shortcut button:hover{background:rgba(140,185,255,.12)}
+@media(max-width:780px){
+ .meme-workbench{grid-template-columns:1fr}
+ .meme-fields{grid-template-columns:repeat(2,minmax(0,1fr));max-height:none}
+ .meme-top{flex-direction:column-reverse;gap:14px}
+ .meme-toolbar label{margin-left:0}
+}
+@media(max-width:510px){
+ .meme-view{width:min(100% - 20px,1120px)}
+ .meme-studio{padding:12px;border-radius:12px}
+ .meme-fields{grid-template-columns:1fr}
+ .meme-layout-picker{width:100%}
+ .meme-layout-picker button{flex:1;padding:11px 7px}
+ .meme-random{flex:1}
+ .meme-toolbar label{width:100%;justify-content:space-between}
+ .meme-preview-wrap{padding:8px}
+ .meme-actions{flex-direction:column;align-items:stretch}
+ .meme-download{width:100%}
+}
