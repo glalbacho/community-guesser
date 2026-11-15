@@ -41,6 +41,9 @@
   const timelineBoard = $("timeline-board"), timelineCards = $("timeline-cards");
   const timelineSubmit = $("timeline-submit"), restart = $("restart-challenge");
   const timelineInstruction = $("timeline-instruction");
+  const timelineEpisodeHint = $("timeline-episode-hint");
+  const timelineShowEpisode = $("timeline-show-episode");
+  const timelineEpisodeName = $("timeline-episode-name");
   const highscoresView = $("highscores-view"), highscoresGrid = $("highscores-grid");
   const highscoresStatus = $("highscores-status"), highscoresOpen = $("show-all-highscores");
   const highscoresBack = $("highscores-back"), highscoresRefresh = $("highscores-refresh");
@@ -1277,6 +1280,7 @@
       const tokens=images.map(item=>item.token);
       currentRound={id:null,timeline:tokens,
         timelineImages:Object.fromEntries(images.map(item=>[item.token,item.url])),
+        episodeHint:data.round.episodeHint||null,
         timelineSolution:data.timelineSolution||null,
         timelineAnswerLabels:Object.fromEntries((data.timelineSolution||[]).map(item=>[item.token,item.episode]))};
       timelineOrder=tokens.slice();
@@ -1350,6 +1354,7 @@
     });
     timelineMotionAnimations=[];
     timelineBoard.classList.remove("reordering","solved","incorrect");
+    timelineEpisodeHint.hidden=true;
     clearBoard();clearAnswerReveal();
     fullEpisodeListOpened=false;
     inputWasFocusedOnPointerDown=false;
@@ -1708,6 +1713,38 @@
     Array.from(timelineCards.children).forEach(el=>el.classList.remove("drag-over"));
     timelineDragging=null;
   }
+  function updateTimelineEpisodeHint() {
+    const available=challenge==="episodeTimeline"&&!!currentRound
+      &&!timelineRevealed&&!awaitingNext&&!gameOver;
+    timelineEpisodeHint.hidden=!available;
+    if(!available)return;
+    const episode=currentRound.episodeHint;
+    timelineShowEpisode.hidden=!!episode;
+    timelineShowEpisode.disabled=false;
+    timelineEpisodeName.hidden=!episode;
+    timelineEpisodeName.textContent=episode&&byId[episode]
+      ?"Episode: "+label(byId[episode]):"";
+  }
+  timelineShowEpisode.addEventListener("click",async()=>{
+    if(challenge!=="episodeTimeline"||!currentRound||!sessionId||
+      timelineRevealed||gameOver||awaitingNext||remoteBusy||
+      currentRound.episodeHint)return;
+    const version=epoch,round=currentRound;
+    timelineShowEpisode.disabled=true;
+    try{
+      const response=await requestGame("episodeHint");
+      if(version!==epoch||round!==currentRound||challenge!=="episodeTimeline")return;
+      if(!byId[response.episode])throw new Error("Episode not found.");
+      currentRound.episodeHint=response.episode;
+      updateTimelineEpisodeHint();
+    }catch(error){
+      if(version===epoch&&round===currentRound){
+        feedback.textContent=error.message||"Couldn't reveal the episode.";
+      }
+    }finally{
+      if(version===epoch&&round===currentRound)timelineShowEpisode.disabled=false;
+    }
+  });
   function renderTimeline() {
     timelineCards.replaceChildren();
     timelineRevealed=false;
@@ -1719,6 +1756,7 @@
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
     timelineSubmit.textContent="Check order";
+    updateTimelineEpisodeHint();
     timelineOrder.forEach((id,i)=>{
       const card=document.createElement("button");
       card.type="button";
@@ -1802,6 +1840,7 @@
   }
   async function revealTimelineInPlace(correct) {
     timelineRevealed=true;
+    updateTimelineEpisodeHint();
     timelineDragging=null;
     timelineSelection=-1;
     const version=++timelineRevealVersion;
