@@ -1235,11 +1235,11 @@
       (challenge === "custom" && !customStarted);
     fourChoices.hidden = !fourEnabled();
     revealControls.hidden = !revealEnabled();
-    highLabel.textContent = challenge === "daily" ? "Best Daily Score" : "High Score";
+    highLabel.textContent = "High Score";
     communityleBoard.hidden = challenge !== "communityle";
     one110Hall.hidden=challenge!=="one110";
     if(challenge==="one110")loadOne110Hall({reset:true});
-    form.querySelector(".score").hidden = challenge === "communityle" || (challenge === "custom" && !customStarted);
+    form.querySelector(".score").hidden = challenge === "daily" || challenge === "communityle" || (challenge === "custom" && !customStarted);
 
     restart.hidden = true;
     textAnswer.classList.remove("replay-only");
@@ -1464,7 +1464,12 @@
       (customHas("once") ? " · " + answered + " / " + episodePool().length : "") +
       " · " + score + " points";
     if (challenge === "one110") message = (answered + 1) + " / " + playable.length + " episodes";
-    if (challenge === "daily") message = dailyDate();
+    if (challenge === "daily") {
+      // A paused wrong answer still displays the previous screenshot. The
+      // counter advances only when the next round is actually shown.
+      const roundNumber = Math.min(5, answered + (awaitingNext ? 0 : 1));
+      message = dailyDate() + " · Round " + roundNumber + " / 5";
+    }
     progressDetail.textContent = message;
     if (revealEnabled()) {
       revealLabel.textContent = "Reveal " + revealStage + " / 5 · " + (6-revealStage) + " points";
@@ -1967,7 +1972,7 @@
     fourChoices.hidden = true;
     const summary = "Daily Challenge complete: " + score + " / 5 correct. Come back tomorrow for the next challenge.";
     feedback.textContent = summary;
-    progressDetail.textContent = dailyDate();
+    progressDetail.textContent = dailyDate() + " · 5 / 5 completed";
     restart.hidden = true;
     showDailyAnswerReveal();
     dailyResultAction.hidden=false;
