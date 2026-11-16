@@ -1,4 +1,4 @@
-import {rateLimit} from "../../src/server/rate-limit.js";
+import {rateLimit,rateLimitSession} from "../../src/server/rate-limit.js";
 import {action, json, setup} from "../../src/server/engine.js";
 
 export async function onRequest({request,env}) {
@@ -7,11 +7,15 @@ export async function onRequest({request,env}) {
   if(Number(request.headers.get("content-length"))>8192)return json({error:"Request too large."},413);
   try {
     const payload=await request.json();
-    const limit=await rateLimit(env.DB,request,"game-api",600,300);
+    const limit=await rateLimit(env.DB,request,"game-api",300,300);
     if(limit)return limit;
     if(payload.action==="start"){
-      const newGameLimit=await rateLimit(env.DB,request,"game-start",80,300);
+      const newGameLimit=await rateLimit(env.DB,request,"game-start",30,300);
       if(newGameLimit)return newGameLimit;
+    }
+    if(payload.action!=="start"){
+      const sessionLimit=await rateLimitSession(env.DB,"game-session",payload.session,240,300);
+      if(sessionLimit)return sessionLimit;
     }
     await setup(env.DB);
     return await action(env.DB,payload);
