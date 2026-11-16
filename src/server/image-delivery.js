@@ -1,5 +1,6 @@
 // Centralized image source and optional Cloudflare Images re-encoding.
-// Enable FRAME_BUCKET (private R2) and IMAGES bindings together in Pages.
+// Pages: FRAME_BUCKET (private R2) + FRAME_ENCODER (Worker service binding).
+// Standalone Worker: an IMAGES binding can also be used directly.
 // Do not silently fall back to public GitHub when private R2 is configured.
 import {imageKey,imagePath,secureRandomInt} from "./engine.js";
 
@@ -10,14 +11,15 @@ export async function deliverFrame(env,episode,frame) {
   const privateSource=!!env.FRAME_BUCKET;
   if(env.FRAME_SOURCE==="r2"&&!privateSource)
     return failure("Private frame bucket not configured.");
-  if(env.FRAME_SECURITY_REQUIRED==="true"&&(!privateSource||!env.IMAGES))
+  if(env.FRAME_SECURITY_REQUIRED==="true"&&(!privateSource||(!env.FRAME_ENCODER&&!env.IMAGES)))
     return failure("Secure frame delivery requires FRAME_BUCKET and IMAGES.");
   let stream;
   if(privateSource) {
     // Private R2 object keys use S01E01/S01E01_0004.webp, etc.
     const object=await env.FRAME_BUCKET.get(imageKey(episode,frame));
     if(!object?.body)return failure("Frame is missing from the private bucket.",502);
-    if(!env.IMAGES)return failure("Images binding is required for private frames.");
+    if(!env.FRAME_ENCODER&&!env.IMAGES)
+      return failure("Private frames require the FRAME_ENCODER service binding.");
     stream=object.body;
   }else{
     const original=await fetch(imagePath(episode,frame),{
@@ -28,8 +30,22 @@ export async function deliverFrame(env,episode,frame) {
       return failure("Frame unavailable.",502);
     stream=original.body;
   }
+  if(env.FRAME_ENCODER) {
+    // Pages Functions support Service bindings, not Images bindings.
+    // The called Worker is private (workers_dev=false) and handles the decode.
+    const result=await env.FRAME_ENCODER.fetch("https://encoder.internal/encode",{
+      method:"POST",headers:{"content-type":"image/webp"},body:stream
+    });
+    if(!result.ok||!result.body||
+        !(result.headers.get("content-type")||"").startsWith("image/"))
+      return failure("Secure frame transformation failed.",502);
+    return new Response(result.body,{status:200,headers:{
+      "content-type":"image/webp","cache-control":"private, no-store, max-age=0",
+      "x-content-type-options":"nosniff"
+    }});
+  }
   if(!env.IMAGES) {
-    // Legacy compatibility until the Cloudflare Images binding is activated.
+    // Legacy compatibility until the private R2 / encoder Worker is active.
     // Still vulnerable to identical-byte hashing; do NOT mark this secure.
     return new Response(stream,{status:200,headers:{
       "content-type":"image/webp","cache-control":"private, max-age=1800",
