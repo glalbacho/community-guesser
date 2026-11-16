@@ -1,7 +1,7 @@
 // Standalone meme images. These tokens never reveal the originating episode
 // and are deliberately independent of the game session and leaderboard.
 import { COMMUNITY_FRAME_NUMBERS } from "../../src/server/frames.js";
-import { EPISODES, imagePath, json } from "../../src/server/engine.js";
+import { EPISODES, imagePath, json, secureRandomInt, secureChance } from "../../src/server/engine.js";
 import { rateLimit } from "../../src/server/rate-limit.js";
 
 const TTL = 6 * 60 * 60 * 1000;
@@ -28,17 +28,17 @@ export async function onRequest({request,env}) {
       const pool = EPISODES.slice();
       const images = [];
       for (let i=0;i<input.count;i++) {
-        const idx = i + Math.floor(Math.random() * (pool.length - i));
+        const idx = i + secureRandomInt(pool.length - i);
         [pool[i],pool[idx]] = [pool[idx],pool[i]];
         const episode = pool[i];
         const available = COMMUNITY_FRAME_NUMBERS[episode];
-        const frame = available[Math.floor(Math.random() * available.length)];
+        const frame = available[secureRandomInt(available.length)];
         const token = crypto.randomUUID();
         await env.DB.prepare("INSERT INTO cg_meme_images (token,episode,frame,expires) VALUES (?,?,?,?)")
           .bind(token,episode,frame,Date.now()+TTL).run();
         images.push("/api/meme?token="+encodeURIComponent(token));
       }
-      if (Math.random()<0.05)
+      if (secureChance(1,20))
         await env.DB.prepare("DELETE FROM cg_meme_images WHERE expires < ?").bind(Date.now()).run();
       return json({images});
     } catch (error) {
