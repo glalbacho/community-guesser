@@ -12,7 +12,7 @@ not remove that vulnerability.
   values; no `Math.random()` in the server selection code.
 - Game API: 300 calls per source IP and 240 calls per session in five minutes;
   game starts: 30 per IP in five minutes.
-- Frame API: 180 calls per IP and 100 per session in five minutes.
+- Frame API: 180 calls per IP and 150 per session in five minutes.
 - Meme API: 12 random-generation calls and 120 image requests per IP in five minutes.
 - Private R2 support, shared between normal screenshots and the meme editor.
 - When a private bucket is present, the app **will not serve raw private frames**
