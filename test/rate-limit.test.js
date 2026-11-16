@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {rateLimit} from "../src/server/rate-limit.js";
+import {rateLimit,rateLimitSession} from "../src/server/rate-limit.js";
 
 function mockDb(){
   const buckets=new Map();
@@ -48,4 +48,17 @@ test("Does not block all local visitors when the real Cloudflare IP header is un
   const request=new Request("http://localhost/api/game");
   assert.equal(await rateLimit(db,request,"test",1,300),null);
   assert.equal(db.buckets.size,0);
+});
+
+test("Session limits stop token replay without blocking another session",async()=>{
+  const db=mockDb();
+  const first="2d5d4017-b4ed-4a64-a3c7-3a2bb104150f";
+  const second="b64b441c-2007-47f2-aec0-5d1d719e018b";
+  assert.equal(await rateLimitSession(db,"frame-session",first,2,300),null);
+  assert.equal(await rateLimitSession(db,"frame-session",first,2,300),null);
+  const blocked=await rateLimitSession(db,"frame-session",first,2,300);
+  assert.equal(blocked.status,429);
+  assert.equal(await rateLimitSession(db,"frame-session",second,2,300),null);
+  assert.equal((await rateLimitSession(db,"frame-session","bad",2,300)).status,404);
+  assert.ok([...db.buckets.keys()].every(key=>!key.includes(first)&&!key.includes(second)));
 });
