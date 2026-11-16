@@ -15,7 +15,7 @@ export async function onRequestGet({params,env,request}) {
     if(ipLimit)return ipLimit;
     const row=await load(env.DB,session);
     if(!row)return new Response("Not found",{status:404});
-    const sessionLimit=await rateLimitSession(env.DB,"frame-session",session,100,300);
+    const sessionLimit=await rateLimitSession(env.DB,"frame-session",session,150,300);
     if(sessionLimit)return sessionLimit;
     const state=row.state;
     const entries=[...(state.current?.images||[]),
