@@ -3,11 +3,18 @@
 // Only short-lived pseudonymous hashes are stored, never raw IP addresses.
 export async function rateLimit(db,request,category,maxRequests,windowSeconds=300) {
   const ip=request.headers.get("CF-Connecting-IP");
-  // Cloudflare provides the real visitor address. Do not create one global
-  // "unknown" bucket that could block all visitors during local development.
+  // Never put all local/preview visitors into a shared "unknown" IP bucket.
   if(!ip)return null;
+  return rateLimitIdentity(db,category,"ip:"+ip,maxRequests,windowSeconds);
+}
+export async function rateLimitSession(db,category,session,maxRequests,windowSeconds=300) {
+  if(typeof session!=="string"||!/^[0-9a-f-]{36}$/i.test(session))
+    return new Response("Invalid session",{status:404});
+  return rateLimitIdentity(db,category,"session:"+session,maxRequests,windowSeconds);
+}
+async function rateLimitIdentity(db,category,identity,maxRequests,windowSeconds) {
   const started=Math.floor(Date.now()/(windowSeconds*1000));
-  const input=new TextEncoder().encode(category+"|"+ip+"|"+started);
+  const input=new TextEncoder().encode(category+"|"+identity+"|"+started);
   const digest=await crypto.subtle.digest("SHA-256",input);
   const fingerprint=Array.from(new Uint8Array(digest).slice(0,20))
     .map(byte=>byte.toString(16).padStart(2,"0")).join("");
@@ -18,7 +25,7 @@ export async function rateLimit(db,request,category,maxRequests,windowSeconds=30
   ).bind(key,(started+1)*windowSeconds).run();
   const row=await db.prepare("SELECT hits FROM cg_rate_buckets WHERE bucket_key=?")
     .bind(key).first();
-  if(Math.random()<0.015){
+  if(crypto.getRandomValues(new Uint32Array(1))[0]%1000<15){
     // Opportunistic cleanup, bounded to avoid large delete transactions.
     try {
       await db.prepare("DELETE FROM cg_rate_buckets WHERE bucket_key IN (SELECT bucket_key FROM cg_rate_buckets WHERE expires_at<? LIMIT 100)")
