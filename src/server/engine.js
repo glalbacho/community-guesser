@@ -51,10 +51,20 @@ export function eligible(c) {
   if(c.challenge==="custom")return EPISODES.filter(e=>c.seasons.includes(Number(e.slice(1,3))));
   return EPISODES;
 }
-function oneOf(arr) {return arr[Math.floor(Math.random()*arr.length)];}
+// Rejection sampling prevents modulo bias.
+export function secureRandomInt(maxExclusive) {
+  if(!Number.isInteger(maxExclusive)||maxExclusive<1||maxExclusive>0x100000000)
+    throw new RangeError("Invalid random range.");
+  const limit=Math.floor(0x100000000/maxExclusive)*maxExclusive;
+  const values=new Uint32Array(1);
+  do{crypto.getRandomValues(values);}while(values[0]>=limit);
+  return values[0]%maxExclusive;
+}
+export const secureChance=(numerator,denominator)=>secureRandomInt(denominator)<numerator;
+function oneOf(arr) {return arr[secureRandomInt(arr.length)];}
 function shuffled(array) {
   const a=array.slice();
-  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  for(let i=a.length-1;i>0;i--){const j=secureRandomInt(i+1);[a[i],a[j]]=[a[j],a[i]];}
   return a;
 }
 function chooseFrames(episode,three=false) {
@@ -62,7 +72,7 @@ function chooseFrames(episode,three=false) {
   if(!Array.isArray(frames)||!frames.length)throw new Error("Frame catalogue is empty.");
   if(three&&frames.length>=3)return [0,1,2].map(part=>{
     const begin=Math.floor(part*frames.length/3),end=Math.floor((part+1)*frames.length/3);
-    return frames[begin+Math.floor(Math.random()*(end-begin))];
+    return frames[begin+secureRandomInt(end-begin)];
   });
   return [oneOf(frames)];
 }
@@ -73,7 +83,7 @@ function episodeTimelineFrames(episode) {
   return spans.map(([low,high])=>{
     const begin=Math.floor(frames.length*low);
     const end=Math.max(begin+1,Math.ceil(frames.length*high));
-    return frames[begin+Math.floor(Math.random()*(end-begin))];
+    return frames[begin+secureRandomInt(end-begin)];
   });
 }
 function imageEntry(episode,frame) {return {token:uuid(),episode,frame};}
@@ -149,7 +159,7 @@ async function makeRound(db,s) {
     const chronological=episodeTimelineFrames(episode);
     const items=chronological.map(frame=>imageEntry(episode,frame));
     let order;
-    if(Math.random()<0.10)order=items.slice();
+    if(secureChance(1,10))order=items.slice();
     else{
       order=shuffled(items);
       if(order.every((entry,i)=>entry.token===items[i].token))
@@ -162,7 +172,7 @@ async function makeRound(db,s) {
     const picks=shuffled(eligible(c)).slice(0,3);
     const chronological=picks.slice().sort((a,b)=>EPISODES.indexOf(a)-EPISODES.indexOf(b));
     let order;
-    if(Math.random()<0.10)order=chronological.slice();
+    if(secureChance(1,10))order=chronological.slice();
     else {
       order=shuffled(picks);
       if(order.every((id,i)=>id===chronological[i]))
@@ -246,7 +256,7 @@ export async function start(db,settings,resumeId) {
     .bind(s.id,mode,JSON.stringify(s),now()).run();
   // Small opportunistic batches prevent abandoned anonymous sessions from
   // consuming the free D1 storage quota indefinitely.
-  if(Math.random()<0.02){
+  if(secureChance(1,50)){
     try {await db.prepare("DELETE FROM cg_sessions WHERE id IN (SELECT id FROM cg_sessions WHERE updated_at<? ORDER BY updated_at LIMIT 200)")
       .bind(now()-30*86400e3).run();}catch(_){/* cleanup is best effort */}
   }
