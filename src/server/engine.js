@@ -92,9 +92,12 @@ function threeEnabled(c) {return c.challenge==="classic"&&c.mode==="easy" ||
 function fourEnabled(c) {return c.challenge==="four"||c.challenge==="custom"&&c.features.four;}
 function revealEnabled(c) {return c.challenge==="progressive"||c.challenge==="custom"&&c.features.reveal;}
 function imageUrl(s, entry) {return "/api/frame/"+s.id+"/"+entry.token;}
+export function imageKey(episode,frame) {
+  return episode+"/"+episode+"_"+String(frame).padStart(4,"0")+".webp";
+}
 export function imagePath(episode,frame) {
   const base=ASSET_BASES[ASSET_REPO_BY_SEASON[episode.slice(0,3)]];
-  return base+episode+"/"+episode+"_"+String(frame).padStart(4,"0")+".webp";
+  return base+imageKey(episode,frame);
 }
 function wordleHint(guess,answer) {
   const g=[Number(guess.slice(1,3)),Number(guess.slice(4))];
