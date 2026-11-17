@@ -1935,7 +1935,7 @@
     gameOver = true;
     // On a loss, restore the original in the existing viewer for every
     // mode with distortion (including Progressive Reveal and custom mixes).
-    if (message.startsWith("Game over") && (revealEnabled() || distortedEnabled())) {
+    if ((message.startsWith("Game over") || revealAfterGuess) && (revealEnabled() || distortedEnabled())) {
       showUnmodifiedAnswer = true;
       if(revealEnabled())revealStage = 5;
       displayFrame();
