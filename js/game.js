@@ -72,11 +72,13 @@
   const fourEnabled = () => challenge === "four" || customHas("four");
   const threeEnabled = () => (challenge === "classic" && mode === "easy") || customHas("three");
   const distortedEnabled = () => (challenge === "classic" && mode === "impossible") || customHas("distort");
+  const pauseForOriginalAfterGuess = () => revealAfterGuess && (distortedEnabled() || revealEnabled());
   const isTimeline = () => challenge==="timeline" || challenge==="episodeTimeline";
   const openOptions = $("open-options"), optionsPanel = $("options-panel");
   const optionsView = $("options-view"), optionsBack = $("options-back");
   let activeView = "game";
   const optionShowOnFocus = $("option-show-on-focus"), optionAutoFocus = $("option-auto-focus");
+  const optionRevealAfterGuess = $("option-reveal-after-guess");
   const optionTimelineSpeed = $("option-timeline-speed");
   const timelineDurations = {fast:300,normal:700,slow:1300};
   const answerReveal = $("answer-reveal"), answerRevealTitle = $("answer-reveal-title");
@@ -122,12 +124,13 @@
   let challenge = "classic", score = 0, high = 0;
   let customLives = 3, customSeasons = [1,2,3,4,5,6], customStarted = false;
   let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false,hideSolved:false};
-  let showOnFocus = true, autoFocusInput = false, timelineSpeed = "slow";
+  let showOnFocus = true, autoFocusInput = false, revealAfterGuess = false, timelineSpeed = "slow";
   let fullEpisodeListOpened = false, inputWasFocusedOnPointerDown = false;
   try {
     const savedOptions = JSON.parse(localStorage.getItem(optionsKey) || "{}");
     if (typeof savedOptions.showOnFocus === "boolean") showOnFocus = savedOptions.showOnFocus;
     if (typeof savedOptions.autoFocusInput === "boolean") autoFocusInput = savedOptions.autoFocusInput;
+    if (typeof savedOptions.revealAfterGuess === "boolean") revealAfterGuess = savedOptions.revealAfterGuess;
     if (Object.hasOwn(timelineDurations,savedOptions.timelineSpeed)) timelineSpeed = savedOptions.timelineSpeed;
     const savedCustom = JSON.parse(localStorage.getItem(customKey) || "{}");
     if (Number.isInteger(savedCustom.lives) && savedCustom.lives >= 1 && savedCustom.lives <= 10) customLives = savedCustom.lives;
@@ -141,6 +144,7 @@
   } catch (_) {}
   optionShowOnFocus.checked = showOnFocus;
   optionAutoFocus.checked = autoFocusInput;
+  optionRevealAfterGuess.checked = revealAfterGuess;
   optionTimelineSpeed.value = timelineSpeed;
   customLivesInput.value = String(customLives);
   customLivesDisplay.textContent = String(customLives);
@@ -164,7 +168,7 @@
     customSummary.textContent = total + " episodes · " + customLivesInput.value + " lives · " + selectedFeatures.join(" + ");
   }
   function saveOptions() {
-    try { localStorage.setItem(optionsKey, JSON.stringify({showOnFocus, autoFocusInput, timelineSpeed})); } catch (_) {}
+    try { localStorage.setItem(optionsKey, JSON.stringify({showOnFocus, autoFocusInput, revealAfterGuess, timelineSpeed})); } catch (_) {}
   }
   function saveCustom() {
     try { localStorage.setItem(customKey, JSON.stringify({lives:customLives, seasons:customSeasons, features:customFeatures})); } catch (_) {}
@@ -176,6 +180,10 @@
   });
   optionAutoFocus.addEventListener("change", () => {
     autoFocusInput = optionAutoFocus.checked;
+    saveOptions();
+  });
+  optionRevealAfterGuess.addEventListener("change", () => {
+    revealAfterGuess = optionRevealAfterGuess.checked;
     saveOptions();
   });
   optionTimelineSpeed.addEventListener("change", () => {
@@ -1305,9 +1313,11 @@
       if(data.lastCorrect===false){
         currentRound.id=data.revealedEpisode;
         pauseAfterWrongAnswer("Wrong! Correct answer: "+label(byId[data.revealedEpisode])+".");
+      }else if(pauseForOriginalAfterGuess()){
+        currentRound.id=data.revealedEpisode;
+        pauseAfterCorrectAnswer("Correct! Score: "+score+".");
       }else{
-        // If the page was reloaded between a correct guess and the next round,
-        // finish advancing the already-verified server session.
+        // When the optional reveal is off, retain automatic progression.
         Promise.resolve().then(()=>createRound());
       }
     }
@@ -2011,6 +2021,26 @@
     feedback.textContent = message;
     updateProgress();
   }
+  function pauseAfterCorrectAnswer(message) {
+    awaitingNext = true;
+    showUnmodifiedAnswer = true;
+    input.disabled = true;
+    closeSuggestions();
+    if (revealEnabled()) revealStage = 5;
+    displayFrame();
+    if (fourEnabled()) {
+      fourChoices.hidden = true;
+      textAnswer.hidden = false;
+    }
+    textAnswer.classList.add("replay-only");
+    button.hidden = false;
+    button.disabled = false;
+    button.textContent = "Next →";
+    feedback.classList.remove("is-wrong");
+    feedback.classList.add("is-correct");
+    feedback.textContent = message;
+    updateProgress();
+  }
   async function answer(value, correction = "") {
     if(refreshDailyAtBoundary())return;
     if(gameOver||awaitingNext||!currentRound||remoteBusy||!sessionId)return;
@@ -2027,7 +2057,7 @@
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     try{
       const guess=isTimeline()?timelineOrder.slice():value;
-      const result=await requestGame("guess",{guess,autoNext:!isTimeline()});
+      const result=await requestGame("guess",{guess,autoNext:!isTimeline() && !pauseForOriginalAfterGuess()});
       failedOperation=null;retryGame.hidden=true;
       if(version!==epoch)return;
       score=result.score;answered=result.answered;lives=result.lives;
@@ -2099,6 +2129,10 @@
         if(result.finished){
           finishGame(challenge==="one110"?"Perfect! You recognized all 110 episodes.":
             "Challenge complete! All selected episodes have been played.");
+          return;
+        }
+        if(pauseForOriginalAfterGuess()){
+          pauseAfterCorrectAnswer("Correct! Score: "+score+".");
           return;
         }
         startedNextRound=true;
