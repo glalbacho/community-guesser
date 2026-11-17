@@ -1626,6 +1626,19 @@
   document.addEventListener("keydown", event => {
     if (event.altKey || event.ctrlKey || event.metaKey || menu.classList.contains("open")) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    // Right arrow sharpens Progressive Reveal even while the answer field is focused.
+    // Do not intercept arrow keys in other form controls or after the round ends.
+    if (event.key === "ArrowRight" && revealEnabled() && currentRound &&
+        !gameOver && !awaitingNext && !remoteBusy && revealStage < 5 &&
+        activeView === "game" && !revealNext.disabled) {
+      const target = event.target;
+      if (!target || !target.closest ||
+          !target.closest("textarea, select, [contenteditable=true], input:not(#episode-input)")) {
+        event.preventDefault();
+        revealNext.click();
+        return;
+      }
+    }
     if (!threeEnabled() || !currentRound) return;
     // Navigate screenshots while typing, but at the first/last image
     // let outward arrows move the text cursor normally in the input.
