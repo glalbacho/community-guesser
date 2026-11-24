@@ -1336,10 +1336,10 @@
       input.disabled=false;button.disabled=false;timelineSubmit.disabled=false;
       applyServerRound(response);
       // The input was disabled while loading. Restore focus after the
-      // new screenshot arrives, specifically for keyboard-driven replays.
-      if(focusInputAfterReplay && !gameOver && !textAnswer.hidden && !input.disabled){
+      // new screenshot arrives, for keyboard-driven replays and Next.
+      if(focusInputAfterReplay){
         focusInputAfterReplay=false;
-        input.focus();
+        if(!gameOver && !awaitingNext && !textAnswer.hidden && !input.disabled)input.focus();
       }
     }catch(error){
       if(version===epoch){failedOperation={kind:"round",action,extra};showServerFailure(error);}
@@ -2206,6 +2206,8 @@
     )) return;
     if (awaitingNext) {
       event.preventDefault();
+      if(remoteBusy)return;
+      focusInputAfterReplay=true;
       advance();
       return;
     }
