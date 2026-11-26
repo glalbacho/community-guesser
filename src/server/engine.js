@@ -2,6 +2,22 @@ import { COMMUNITY_FRAME_NUMBERS, ASSET_BASES, ASSET_REPO_BY_SEASON } from "./fr
 
 export const EPISODES = Object.keys(COMMUNITY_FRAME_NUMBERS).sort();
 const EPISODE_SET = new Set(EPISODES);
+const END_TAG_START = {
+  // Season 1 (pilot excluded)
+  S01E02:410, S01E03:413, S01E04:413, S01E05:414, S01E06:413, S01E07:412, S01E08:411, S01E09:412, S01E10:414, S01E11:411, S01E12:411, S01E13:409, S01E14:399, S01E15:408, S01E16:410, S01E17:413, S01E18:406, S01E19:414, S01E20:400, S01E21:411, S01E22:410, S01E23:401, S01E24:412, S01E25:414,
+  // Season 2
+  S02E01:406, S02E02:414, S02E03:413, S02E04:412, S02E05:407, S02E06:414, S02E07:409, S02E08:413, S02E09:413, S02E10:402, S02E11:417, S02E12:411, S02E13:403, S02E14:414, S02E15:409, S02E16:408, S02E17:399, S02E18:412, S02E19:400, S02E20:412, S02E21:386, S02E22:380, S02E23:416, S02E24:394,
+  // Season 3
+  S03E01:414, S03E02:416, S03E03:414, S03E04:381, S03E05:410, S03E06:412, S03E07:410, S03E08:419, S03E09:412, S03E10:413, S03E11:413, S03E12:416, S03E13:415, S03E14:420, S03E15:402, S03E16:405, S03E17:399, S03E18:400, S03E19:406, S03E20:409, S03E21:412, S03E22:413,
+  // Season 4
+  S04E01:415, S04E02:418, S04E03:411, S04E04:412, S04E05:420, S04E06:417, S04E07:416, S04E08:418, S04E09:402, S04E10:415, S04E11:416, S04E12:419, S04E13:407,
+  // Season 5
+  S05E01:420, S05E02:407, S05E03:415, S05E04:385, S05E05:420, S05E06:406, S05E07:415, S05E08:415, S05E09:407, S05E10:416, S05E11:401, S05E12:400, S05E13:419,
+  // Season 6
+  S06E01:500, S06E02:497, S06E03:443, S06E04:579, S06E05:520, S06E06:527, S06E07:533, S06E08:526, S06E09:545, S06E10:465, S06E11:523, S06E12:489, S06E13:495
+};
+const endTagsEnabled = c => c.challenge==="endTags" || (c.challenge==="custom" && c.features.endTags===true);
+
 const now = () => Date.now();
 const uuid = () => crypto.randomUUID();
 const json = (value, status = 200) => new Response(JSON.stringify(value), {
@@ -22,7 +38,7 @@ export function berlinDate() {
 
 export function configFrom(input) {
   const c = typeof input === "object" && input !== null ? input : {};
-  const challenge = ["classic","custom","daily","communityle","one110","four","timeline","episodeTimeline","progressive"].includes(c.challenge)
+  const challenge = ["classic","custom","daily","communityle","one110","endTags","four","timeline","episodeTimeline","progressive"].includes(c.challenge)
     ? c.challenge : "classic";
   const mode = ["easy","normal","hard","impossible"].includes(c.mode) ? c.mode : "normal";
   const lives = Number.isInteger(c.lives) && c.lives>=1 && c.lives<=10 ? c.lives : 3;
@@ -32,6 +48,7 @@ export function configFrom(input) {
   if (!seasons.length) throw new Error("Choose at least one season.");
   const f = c.features && typeof c.features==="object" ? c.features : {};
   const features = Object.fromEntries(["four","numbers","three","reveal","distort","once"].map(k=>[k,f[k]===true]));
+  features.endTags=challenge==="custom"&&f.endTags===true;
   // Hiding solved answers is exclusively a Custom Game sub-option of Once.
   features.hideSolved=challenge==="custom"&&features.once&&f.hideSolved===true;
   return {challenge,mode,lives,seasons,features};
@@ -41,15 +58,15 @@ export function keyFor(c,date=berlinDate()) {
     case "classic":return "classic:"+c.mode;
     case "custom":return "custom:"+c.lives+":"+c.seasons.join("-")+":"+
       ["four","numbers","three","reveal","distort","once"].map(k=>c.features[k]?"1":"0").join("")+
-      (c.features.hideSolved?"h":"");
+      (c.features.hideSolved?"h":"")+(c.features.endTags?"e":"");
     case "daily":return "daily:"+date;
     case "communityle":return "communityle:"+date;
     default:return "challenge:"+c.challenge;
   }
 }
 export function eligible(c) {
-  if(c.challenge==="custom")return EPISODES.filter(e=>c.seasons.includes(Number(e.slice(1,3))));
-  return EPISODES;
+  return EPISODES.filter(e=>(c.challenge!=="custom"||c.seasons.includes(Number(e.slice(1,3))))&&
+    (!endTagsEnabled(c)|| (END_TAG_START[e]!==undefined && COMMUNITY_FRAME_NUMBERS[e].some(n=>n>=END_TAG_START[e]))));
 }
 // Rejection sampling prevents modulo bias.
 export function secureRandomInt(maxExclusive) {
@@ -67,8 +84,9 @@ function shuffled(array) {
   for(let i=a.length-1;i>0;i--){const j=secureRandomInt(i+1);[a[i],a[j]]=[a[j],a[i]];}
   return a;
 }
-function chooseFrames(episode,three=false) {
-  const frames=COMMUNITY_FRAME_NUMBERS[episode];
+function chooseFrames(episode,three=false,endTags=false) {
+  const all=COMMUNITY_FRAME_NUMBERS[episode];
+  const frames=endTags?all.filter(n=>n>=END_TAG_START[episode]):all;
   if(!Array.isArray(frames)||!frames.length)throw new Error("Frame catalogue is empty.");
   if(three&&frames.length>=3)return [0,1,2].map(part=>{
     const begin=Math.floor(part*frames.length/3),end=Math.floor((part+1)*frames.length/3);
@@ -197,7 +215,7 @@ async function makeRound(db,s) {
   const episode=oneOf(options.length?options:remaining);
   s.previous=episode;
   s.seen.push(episode);
-  const frames=chooseFrames(episode,threeEnabled(c)).map(frame=>imageEntry(episode,frame));
+  const frames=chooseFrames(episode,threeEnabled(c),endTagsEnabled(c)).map(frame=>imageEntry(episode,frame));
   const solved=c.challenge==="custom"&&c.features.hideSolved
     ?new Set(s.history.filter(h=>h.correct).map(h=>h.episode)):null;
   const choices=fourEnabled(c)?shuffled([
@@ -331,7 +349,7 @@ export async function action(db,payload) {
     correct=guess.every((id,i)=>id===expected[i]);
   } else {
     if(typeof guess!=="string"||!EPISODE_SET.has(guess)||
-      c.challenge==="custom"&&!c.seasons.includes(Number(guess.slice(1,3)))||
+      (c.challenge==="custom"||endTagsEnabled(c))&&!eligible(c).includes(guess)||
       c.challenge==="custom"&&c.features.hideSolved&&
         s.history.some(h=>h.correct&&h.episode===guess)||
       s.current.choices&&!s.current.choices.includes(guess))
