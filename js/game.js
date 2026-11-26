@@ -59,13 +59,13 @@
   const customModifiers = {
     four:$("custom-four"), numbers:$("custom-numbers"), three:$("custom-three"),
     reveal:$("custom-reveal"), distort:$("custom-distort"), once:$("custom-once"),
-    hideSolved:$("custom-hide-solved")
+    hideSolved:$("custom-hide-solved"), endTags:$("custom-end-tags")
   };
-  const modifierKeys = ["four","numbers","three","reveal","distort","once","hideSolved"];
+  const modifierKeys = ["four","numbers","three","reveal","distort","once","hideSolved","endTags"];
   const hideSolvedRow=$("custom-hide-solved-row");
   // Keep old Custom Game personal high scores when the new rule is off.
   const customFeatureFlags = () => ["four","numbers","three","reveal","distort","once"]
-    .map(key => customFeatures[key] ? "1" : "0").join("") + (customFeatures.hideSolved?"h":"");
+    .map(key => customFeatures[key] ? "1" : "0").join("") + (customFeatures.hideSolved?"h":"") + (customFeatures.endTags?"e":"");
   const customHas = key => challenge === "custom" && customStarted && customFeatures[key];
   const hideSolvedEnabled=()=>customHas("once")&&customHas("hideSolved");
   const revealEnabled = () => challenge === "progressive" || customHas("reveal");
@@ -104,7 +104,7 @@
   const legacyHighScoreKey = "community-guesser-high-score";
   const challengeNames = {
     classic: "Classic game", progressive: "Progressive Reveal",
-    four: "Four Choices", timeline: "Timeline Challenge",
+    endTags: "End Tags", four: "Four Choices", timeline: "Timeline Challenge",
     episodeTimeline: "Episode Timeline",
     one110: "One Life, 110",
     daily: "Daily Challenge", custom: "Custom Game",
@@ -123,7 +123,7 @@
   modeSelect.value = mode;
   let challenge = "classic", score = 0, high = 0;
   let customLives = 3, customSeasons = [1,2,3,4,5,6], customStarted = false;
-  let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false,hideSolved:false};
+  let customFeatures = {four:false,numbers:false,three:false,reveal:false,distort:false,once:false,hideSolved:false,endTags:false};
   let showOnFocus = true, autoFocusInput = false, revealAfterGuess = false, timelineSpeed = "slow";
   let fullEpisodeListOpened = false, inputWasFocusedOnPointerDown = false;
   try {
@@ -156,9 +156,10 @@
     customModifiers.hideSolved.disabled=!once;
     if(!once)customModifiers.hideSolved.checked=false;
     const selectedSeasons = customSeasonInputs.filter(el => el.checked).map(el => Number(el.value));
-    const total = playable.filter(ep => selectedSeasons.includes(seasonNumber(ep))).length;
+    const total = playable.filter(ep => selectedSeasons.includes(seasonNumber(ep)) && (!customModifiers.endTags.checked || ep.id!=="S01E01")).length;
     const selectedFeatures = [customModifiers.four.checked ? "Four Choices" : "typed answers"];
     if (customModifiers.numbers.checked) selectedFeatures.push("numbers only");
+    if (customModifiers.endTags.checked) selectedFeatures.push("end tags only");
     if (customModifiers.three.checked) selectedFeatures.push("3 images");
     if (customModifiers.reveal.checked) selectedFeatures.push("Reveal");
     if (customModifiers.distort.checked) selectedFeatures.push("Impossible");
@@ -785,8 +786,10 @@
   }
 
   function candidateEpisodes() {
+    if (challenge === "endTags") return episodes.filter(ep => ep.id!=="S01E01");
     if (challenge === "custom") return episodes.filter(ep =>
       customSeasons.includes(seasonNumber(ep)) &&
+      (!customHas("endTags") || ep.id!=="S01E01") &&
       (!hideSolvedEnabled() || !solvedEpisodes.has(ep.id)));
     return episodes;
   }
@@ -1073,6 +1076,7 @@
     const basic=[
       ["classic:easy","Easy Mode"],["classic:normal","Normal Mode"],
       ["classic:hard","Hard Mode"],["classic:impossible","Impossible Mode"],
+      ["challenge:endTags","End Tags"],
       ["challenge:four","Four Choices"],
       ["challenge:timeline","Timeline Challenge"],["challenge:episodeTimeline","Episode Timeline"],
       ["challenge:progressive","Progressive Reveal"]
@@ -1432,7 +1436,8 @@
   });
 
   function episodePool() {
-    if (challenge === "custom") return playable.filter(ep => customSeasons.includes(seasonNumber(ep)));
+    if (challenge === "endTags") return playable.filter(ep => ep.id!=="S01E01");
+    if (challenge === "custom") return playable.filter(ep => customSeasons.includes(seasonNumber(ep)) && (!customHas("endTags") || ep.id!=="S01E01"));
     return playable;
   }
   function createFrame(url, displayEpoch) {
