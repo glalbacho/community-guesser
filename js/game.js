@@ -786,7 +786,6 @@
   }
 
   function candidateEpisodes() {
-    if (challenge === "endTags") return episodes.filter(ep => ep.id!=="S01E01");
     if (challenge === "custom") return episodes.filter(ep =>
       customSeasons.includes(seasonNumber(ep)) &&
       (!customHas("endTags") || ep.id!=="S01E01") &&
