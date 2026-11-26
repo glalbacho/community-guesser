@@ -349,7 +349,7 @@ export async function action(db,payload) {
     correct=guess.every((id,i)=>id===expected[i]);
   } else {
     if(typeof guess!=="string"||!EPISODE_SET.has(guess)||
-      (c.challenge==="custom"||endTagsEnabled(c))&&!eligible(c).includes(guess)||
+      c.challenge==="custom"&&!eligible(c).includes(guess)||
       c.challenge==="custom"&&c.features.hideSolved&&
         s.history.some(h=>h.correct&&h.episode===guess)||
       s.current.choices&&!s.current.choices.includes(guess))
