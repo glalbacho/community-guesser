@@ -1304,12 +1304,17 @@
   memePickerClose?.addEventListener("click",closeMemePicker);
   memePicker?.addEventListener("click",ev=>{if(ev.target===memePicker)closeMemePicker();});
   memePicker?.addEventListener("close",()=>memePickerGrid.replaceChildren());
-  function memeDropHit(x,y){
-    const r=memeFromGame.getBoundingClientRect();
-    return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;
+  const memeDropEpsilon=16;
+  function memeDropHit(frame){
+    if(!frame)return false;
+    const r=memeFromGame.getBoundingClientRect(),b=frame.getBoundingClientRect();
+    // Distance between the two rectangles, not the pointer position.
+    const dx=Math.max(r.left-b.right,b.left-r.right,0);
+    const dy=Math.max(r.top-b.bottom,b.top-r.bottom,0);
+    return Math.hypot(dx,dy)<=memeDropEpsilon;
   }
-  function highlightMemeDrop(x,y){
-    memeFromGame.classList.toggle("meme-drop-hover",memeDropHit(x,y));
+  function highlightMemeDrop(frame){
+    memeFromGame.classList.toggle("meme-drop-hover",memeDropHit(frame));
   }
   function clearMemeDrop(){
     memeFromGame.classList.remove("meme-drop-hover");
@@ -1351,12 +1356,13 @@
         ghost.className="meme-drag-ghost";document.body.appendChild(ghost);drag.ghost=ghost;
       }
       drag.ghost.style.left=ev.clientX+"px";drag.ghost.style.top=ev.clientY+"px";
-      highlightMemeDrop(ev.clientX,ev.clientY);
+      highlightMemeDrop(drag.ghost);
     });
     container.addEventListener("pointerup",ev=>{
       const drag=standaloneMemeDrag;
       if(!drag||drag.pointerId!==ev.pointerId)return;
-      const hit=!!drag.ghost&&memeDropHit(ev.clientX,ev.clientY);
+      if(drag.ghost){drag.ghost.style.left=ev.clientX+"px";drag.ghost.style.top=ev.clientY+"px";}
+      const hit=!!drag.ghost&&memeDropHit(drag.ghost);
       cancelStandaloneMemeDrag();
       if(hit){ev.preventDefault();importMemeFrame(drag.source);}
     });
@@ -2029,7 +2035,7 @@
             if(!drag.active)return;
             b.classList.add("dragging");
             b.style.transform="translate3d("+dx+"px,"+dy+"px,0)";
-            highlightMemeDrop(ev.clientX,ev.clientY);
+            highlightMemeDrop(b.querySelector("img"));
             const target=groupDropTarget(ev.clientX,ev.clientY,drag);
             timelineCards.querySelectorAll(".drag-over").forEach(node=>node.classList.remove("drag-over"));
             if(target&&target.node!==b)target.node.classList.add("drag-over");
@@ -2039,7 +2045,8 @@
             if(!drag||drag.card!==b||drag.pointerId!==ev.pointerId)return;
             ev.preventDefault();
             const target=groupDropTarget(ev.clientX,ev.clientY,drag),active=drag.active;
-            const memeHit=active&&memeDropHit(ev.clientX,ev.clientY);
+            if(active)b.style.transform="translate3d("+(ev.clientX-drag.startX)+"px,"+(ev.clientY-drag.startY)+"px,0)";
+            const memeHit=active&&memeDropHit(b.querySelector("img"));
             const fromRects=active?groupCardRects():null;
             clearGroupDrag();
             if(memeHit){importMemeFrame(b.querySelector("img"));return;}
@@ -2132,7 +2139,7 @@
         card.classList.add("dragging");
         // Unlike the old implementation, the real card follows the pointer.
         card.style.transform="translate3d("+dx+"px,"+dy+"px,0)";
-        highlightMemeDrop(event.clientX,event.clientY);
+        highlightMemeDrop(img);
         const index=drag.rects.findIndex(r=>
           event.clientX>=r.left&&event.clientX<=r.right&&
           event.clientY>=r.top&&event.clientY<=r.bottom);
@@ -2144,7 +2151,8 @@
         if(!drag||drag.card!==card||drag.pointerId!==event.pointerId)return;
         event.preventDefault();
         const active=drag.active;
-        if(active&&memeDropHit(event.clientX,event.clientY)){
+        if(active)card.style.transform="translate3d("+(event.clientX-drag.startX)+"px,"+(event.clientY-drag.startY)+"px,0)";
+        if(active&&memeDropHit(img)){
           cancelTimelineDrag(card);importMemeFrame(img);return;
         }
         const from=timelineOrder.indexOf(id);

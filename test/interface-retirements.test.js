@@ -94,12 +94,24 @@ test("Meme picker uses visible images and pointer drop target",()=>{
   assert.match(html,/id="meme-frame-picker"/);
   assert.match(game,/memePicker\.showModal\(\)/);
   assert.match(game,/paintFrame\(frame,preview,true\)/);
-  assert.match(game,/memeDropHit\(event\.clientX,event\.clientY\)/);
+  assert.match(game,/memeDropHit\(img\)/);
   assert.match(game,/importMemeFrame\(b\.querySelector\("img"\)\)/);
 });
 
 test("Meme button only highlights when the dragged frame is over it",()=>{
   const helper=game.slice(game.indexOf("function highlightMemeDrop"),game.indexOf("// Drag single-view screenshots"));
-  assert.match(helper,/classList\.toggle\("meme-drop-hover",memeDropHit\(x,y\)\)/);
+  assert.match(helper,/classList\.toggle\("meme-drop-hover",memeDropHit\(frame\)\)/);
   assert.doesNotMatch(helper,/meme-drop-ready|meme-floating-drop/);
+});
+
+test("Meme hitbox accepts frame overlap and a 16px Euclidean neighbourhood",()=>{
+  const source=game.slice(game.indexOf("const memeDropEpsilon="),game.indexOf("function highlightMemeDrop"));
+  const button={left:100,right:200,top:100,bottom:150};
+  const hit=new Function("memeFromGame",source+";return memeDropHit;")({getBoundingClientRect:()=>button});
+  const frame=(left,right,top,bottom)=>({getBoundingClientRect:()=>({left,right,top,bottom})});
+  assert.equal(hit(frame(0,100,100,150)),true);
+  assert.equal(hit(frame(0,84,100,150)),true);
+  assert.equal(hit(frame(0,83,100,150)),false);
+  assert.equal(hit(frame(0,90,0,90)),true);
+  assert.equal(hit(frame(0,88,0,88)),false);
 });
