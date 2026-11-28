@@ -1309,15 +1309,10 @@
     return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;
   }
   function highlightMemeDrop(x,y){
-    if(!memeFromGame.classList.contains("meme-drop-ready")){
-      const r=memeFromGame.getBoundingClientRect();
-      if(r.bottom>window.innerHeight||r.top<0)memeFromGame.classList.add("meme-floating-drop");
-      memeFromGame.classList.add("meme-drop-ready");
-    }
     memeFromGame.classList.toggle("meme-drop-hover",memeDropHit(x,y));
   }
   function clearMemeDrop(){
-    memeFromGame.classList.remove("meme-drop-ready","meme-drop-hover","meme-floating-drop");
+    memeFromGame.classList.remove("meme-drop-hover");
   }
   // Drag single-view screenshots and already-revealed cards to the same target.
   // Active ordering cards use their own pointer handlers below.

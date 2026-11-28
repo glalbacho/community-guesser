@@ -97,3 +97,9 @@ test("Meme picker uses visible images and pointer drop target",()=>{
   assert.match(game,/memeDropHit\(event\.clientX,event\.clientY\)/);
   assert.match(game,/importMemeFrame\(b\.querySelector\("img"\)\)/);
 });
+
+test("Meme button only highlights when the dragged frame is over it",()=>{
+  const helper=game.slice(game.indexOf("function highlightMemeDrop"),game.indexOf("// Drag single-view screenshots"));
+  assert.match(helper,/classList\.toggle\("meme-drop-hover",memeDropHit\(x,y\)\)/);
+  assert.doesNotMatch(helper,/meme-drop-ready|meme-floating-drop/);
+});
