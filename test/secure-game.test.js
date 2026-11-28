@@ -546,3 +546,28 @@ test("Custom one-time hide mode still finishes after every one of the 110 episod
   }),env:{DB:db}});
   assert.equal(post.status,400,"Custom games cannot submit a public high score");
 });
+
+for(const [challenge,count,size] of [["endTagPairs",8,2],["episodeGroups",12,4]])test(challenge+" verifies complete groups without exposing the solution",async()=>{
+  const db=createDb();await setup(db);
+  const round=await start(db,{challenge});
+  assert.equal(round.round.images.length,count);
+  assert.equal(round.timelineSolution,undefined);
+  assert.equal(round.round.timeline.length,count);
+  const items=privateGame(db,round.session).current.timeline;
+  const grouped=items.slice().sort((a,b)=>a.episode.localeCompare(b.episode)||a.frame-b.frame);
+  assert.equal(new Set(items.map(x=>x.episode)).size,count/size);
+  for(let i=0;i<count;i+=size)assert.equal(new Set(grouped.slice(i,i+size).map(x=>x.episode)).size,1);
+  assert.equal((await action(db,{action:"guess",session:round.session,guess:Array(count).fill(items[0].token)})).status,400);
+  const result=await call(db,{action:"guess",session:round.session,guess:grouped.map(x=>x.token)});
+  assert.equal(result.correct,true);assert.equal(result.score,1);assert.equal(result.timelineSolution.length,count);
+});
+test("Custom grouped round uses selected seasons and lives",async()=>{
+  const db=createDb();await setup(db);
+  const round=await start(db,{challenge:"custom",format:"episodeGroups",seasons:[2],lives:3});
+  const items=privateGame(db,round.session).current.timeline;
+  assert.equal(items.length,12);assert.ok(items.every(x=>x.episode.startsWith("S02")));assert.equal(round.lives,3);
+  const ordered=items.slice().sort((a,b)=>a.episode.localeCompare(b.episode)||a.frame-b.frame);
+  [ordered[0],ordered[1]]=[ordered[1],ordered[0]];
+  const result=await call(db,{action:"guess",session:round.session,guess:ordered.map(x=>x.token)});
+  assert.equal(result.correct,false);assert.equal(result.lives,2);assert.equal(result.awaitingNext,true);
+});

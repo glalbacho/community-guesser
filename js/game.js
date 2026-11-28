@@ -61,11 +61,15 @@
     reveal:$("custom-reveal"), distort:$("custom-distort"), once:$("custom-once"),
     hideSolved:$("custom-hide-solved"), endTags:$("custom-end-tags")
   };
+  const customFormatInput=$("custom-format"), noEndTagsInput=$("custom-no-end-tags");
+  let customFormat="",customNoEndTags=false;
+  const gameFormat=()=>challenge==="custom"&&customStarted?customFormat:challenge;
+  const isGrouping=()=>["endTagPairs","episodeGroups"].includes(gameFormat());
   const modifierKeys = ["four","numbers","three","reveal","distort","once","hideSolved","endTags"];
   const hideSolvedRow=$("custom-hide-solved-row");
   // Keep old Custom Game personal high scores when the new rule is off.
   const customFeatureFlags = () => ["four","numbers","three","reveal","distort","once"]
-    .map(key => customFeatures[key] ? "1" : "0").join("") + (customFeatures.hideSolved?"h":"") + (customFeatures.endTags?"e":"");
+    .map(key => customFeatures[key] ? "1" : "0").join("") + (customFeatures.hideSolved?"h":"") + (customFeatures.endTags?"e":"") + (customNoEndTags?"n":"") + (customFormat?":"+customFormat:"");
   const customHas = key => challenge === "custom" && customStarted && customFeatures[key];
   const hideSolvedEnabled=()=>customHas("once")&&customHas("hideSolved");
   const revealEnabled = () => challenge === "progressive" || customHas("reveal");
@@ -73,7 +77,7 @@
   const threeEnabled = () => (challenge === "classic" && mode === "easy") || customHas("three");
   const distortedEnabled = () => (challenge === "classic" && mode === "impossible") || customHas("distort");
   const pauseForOriginalAfterGuess = () => revealAfterGuess && (distortedEnabled() || revealEnabled());
-  const isTimeline = () => challenge==="timeline" || challenge==="episodeTimeline";
+  const isTimeline = () => ["timeline","episodeTimeline","endTagPairs","episodeGroups"].includes(gameFormat());
   const openOptions = $("open-options"), optionsPanel = $("options-panel");
   const optionsView = $("options-view"), optionsBack = $("options-back");
   let activeView = "game";
@@ -105,7 +109,7 @@
   const challengeNames = {
     classic: "Classic game", progressive: "Progressive Reveal",
     endTags: "End Tags", four: "Four Choices", timeline: "Timeline Challenge",
-    episodeTimeline: "Episode Timeline",
+    episodeTimeline: "Episode Timeline", endTagPairs:"End Tag Match", episodeGroups:"Mixed Episode Timeline", noEndTags:"No End Tags",
     one110: "One Life, 110",
     daily: "Daily Challenge", custom: "Custom Game",
     communityle: "Communityle"
@@ -138,6 +142,8 @@
       const valid = [...new Set(savedCustom.seasons.map(Number))].filter(n => Number.isInteger(n) && n >= 1 && n <= 6);
       if (valid.length) customSeasons = valid.sort((a,b) => a-b);
     }
+    if(["timeline","episodeTimeline","endTagPairs","episodeGroups"].includes(savedCustom.format))customFormat=savedCustom.format;
+    customNoEndTags=savedCustom.features?.noEndTags===true;
     if (savedCustom.features && typeof savedCustom.features === "object") {
       modifierKeys.forEach(key => { customFeatures[key] = savedCustom.features[key] === true; });
     }
@@ -150,14 +156,23 @@
   customLivesDisplay.textContent = String(customLives);
   customSeasonInputs.forEach(el => { el.checked = customSeasons.includes(Number(el.value)); });
   modifierKeys.forEach(key => { customModifiers[key].checked = customFeatures[key]; });
+  if(customFormatInput)customFormatInput.value=customFormat;
+  if(noEndTagsInput)noEndTagsInput.checked=customNoEndTags;
   function updateCustomSummary() {
+    const format=customFormatInput?.value||"";
+    const group=["endTagPairs","episodeGroups"].includes(format);
+    if(format)modifierKeys.forEach(k=>{customModifiers[k].checked=false;});
+    modifierKeys.forEach(k=>{if(k!=="hideSolved")customModifiers[k].disabled=!!format;});
+    if(noEndTagsInput){noEndTagsInput.disabled=group||customModifiers.endTags.checked;if(noEndTagsInput.disabled)noEndTagsInput.checked=false;}
+    if(noEndTagsInput?.checked){customModifiers.endTags.checked=false;customModifiers.endTags.disabled=true;}
     const once=customModifiers.once.checked;
     hideSolvedRow.hidden=!once;
     customModifiers.hideSolved.disabled=!once;
     if(!once)customModifiers.hideSolved.checked=false;
     const selectedSeasons = customSeasonInputs.filter(el => el.checked).map(el => Number(el.value));
     const total = playable.filter(ep => selectedSeasons.includes(seasonNumber(ep)) && (!customModifiers.endTags.checked || ep.id!=="S01E01")).length;
-    const selectedFeatures = [customModifiers.four.checked ? "Four Choices" : "typed answers"];
+    const selectedFeatures = [format?challengeNames[format]:customModifiers.four.checked ? "Four Choices" : "typed answers"];
+    if(noEndTagsInput?.checked)selectedFeatures.push("no end tags");
     if (customModifiers.numbers.checked) selectedFeatures.push("numbers only");
     if (customModifiers.endTags.checked) selectedFeatures.push("end tags only");
     if (customModifiers.three.checked) selectedFeatures.push("3 images");
@@ -172,7 +187,7 @@
     try { localStorage.setItem(optionsKey, JSON.stringify({showOnFocus, autoFocusInput, revealAfterGuess, timelineSpeed})); } catch (_) {}
   }
   function saveCustom() {
-    try { localStorage.setItem(customKey, JSON.stringify({lives:customLives, seasons:customSeasons, features:customFeatures})); } catch (_) {}
+    try { localStorage.setItem(customKey, JSON.stringify({lives:customLives, seasons:customSeasons, format:customFormat,features:{...customFeatures,noEndTags:customNoEndTags}})); } catch (_) {}
   }
   optionShowOnFocus.addEventListener("change", () => {
     showOnFocus = optionShowOnFocus.checked;
@@ -203,6 +218,8 @@
     customError.hidden = true;
     updateCustomSummary();
   }));
+  customFormatInput?.addEventListener("change",updateCustomSummary);
+  noEndTagsInput?.addEventListener("change",updateCustomSummary);
   updateCustomSummary();
   customStart.addEventListener("click", () => {
     const seasons = customSeasonInputs.filter(el => el.checked).map(el => Number(el.value));
@@ -216,6 +233,8 @@
       key,key==="hideSolved" ? customModifiers.once.checked&&customModifiers.hideSolved.checked
         : customModifiers[key].checked
     ]));
+    customFormat=customFormatInput?.value||"";
+    customNoEndTags=!!noEndTagsInput?.checked;
     saveCustom();
     customStarted = true;
     resetGame();
@@ -236,7 +255,7 @@
   const sessionStoreKey = () => "community-guesser-session-v2:" + boardKey();
   function gameSettings() {
     return {challenge,mode,lives:customLives,
-      seasons:customSeasons.slice(),features:{...customFeatures}};
+      seasons:customSeasons.slice(),format:customFormat,features:{...customFeatures,noEndTags:customNoEndTags}};
   }
   async function requestGame(action, details={}) {
     const response=await fetch("/api/game",{
@@ -1075,7 +1094,7 @@
     const basic=[
       ["classic:easy","Easy Mode"],["classic:normal","Normal Mode"],
       ["classic:hard","Hard Mode"],["classic:impossible","Impossible Mode"],
-      ["challenge:endTags","End Tags"],
+      ["challenge:endTags","End Tags"],["challenge:noEndTags","No End Tags"],["challenge:endTagPairs","End Tag Match"],["challenge:episodeGroups","Mixed Episode Timeline"],
       ["challenge:four","Four Choices"],
       ["challenge:timeline","Timeline Challenge"],["challenge:episodeTimeline","Episode Timeline"],
       ["challenge:progressive","Progressive Reveal"]
@@ -1233,11 +1252,13 @@
       customLivesDisplay.textContent = String(customLives);
       customSeasonInputs.forEach(el => { el.checked = customSeasons.includes(Number(el.value)); });
       modifierKeys.forEach(key => { customModifiers[key].checked = customFeatures[key]; });
+      if(customFormatInput)customFormatInput.value=customFormat;
+      if(noEndTagsInput)noEndTagsInput.checked=customNoEndTags;
       updateCustomSummary();
       customError.hidden = true;
     }
     challengeSubtitle.hidden = challenge === "classic";
-    challengeSubtitle.textContent = challengeNames[challenge] || "";
+    challengeSubtitle.textContent = challenge==="custom"&&customStarted&&customFormat?"Custom Game · "+challengeNames[customFormat]:challengeNames[challenge] || "";
     challengeTools.hidden = challenge !== "one110" &&
       challenge !== "daily" && challenge !== "custom";
     frameViewer.hidden = isTimeline() || (challenge === "custom" && !customStarted);
@@ -1259,6 +1280,7 @@
   function menuPickerMark() {
     challengeLinks.forEach(b => {
       const active = b.getAttribute("data-challenge") === challenge;
+      if(active){const details=b.closest?.("details");if(details)details.open=true;}
       b.classList.toggle("active", active);
       b.setAttribute("aria-current", active ? "page" : "false");
     });
@@ -1313,6 +1335,7 @@
       else if(challenge==="communityle")finishCommunityle();
       else finishGame("Game over! Final score: "+score+".");
     }else if(data.awaitingNext) {
+      if(isTimeline()){awaitingNext=true;revealTimelineInPlace(data.lastCorrect!==false);return;}
       if(data.lastCorrect===false){
         currentRound.id=data.revealedEpisode;
         pauseAfterWrongAnswer("Wrong! Correct answer: "+label(byId[data.revealedEpisode])+".");
@@ -1746,7 +1769,7 @@
     timelineDragging=null;
   }
   function updateTimelineEpisodeHint() {
-    const available=challenge==="episodeTimeline"&&!!currentRound
+    const available=gameFormat()==="episodeTimeline"&&!!currentRound
       &&!timelineRevealed&&!awaitingNext&&!gameOver;
     timelineEpisodeHint.hidden=!available;
     if(!available)return;
@@ -1758,14 +1781,14 @@
       ?"Episode: "+label(byId[episode]):"";
   }
   timelineShowEpisode.addEventListener("click",async()=>{
-    if(challenge!=="episodeTimeline"||!currentRound||!sessionId||
+    if(gameFormat()!=="episodeTimeline"||!currentRound||!sessionId||
       timelineRevealed||gameOver||awaitingNext||remoteBusy||
       currentRound.episodeHint)return;
     const version=epoch,round=currentRound;
     timelineShowEpisode.disabled=true;
     try{
       const response=await requestGame("episodeHint");
-      if(version!==epoch||round!==currentRound||challenge!=="episodeTimeline")return;
+      if(version!==epoch||round!==currentRound||gameFormat()!=="episodeTimeline")return;
       if(!byId[response.episode])throw new Error("Episode not found.");
       currentRound.episodeHint=response.episode;
       updateTimelineEpisodeHint();
@@ -1777,11 +1800,81 @@
       if(version===epoch&&round===currentRound)timelineShowEpisode.disabled=false;
     }
   });
+  let groupSlots=[],groupPool=[],groupSelected=null;
+  function renderGrouping(revealed=false,correct=false,preserve=false){
+    const pairs=gameFormat()==="endTagPairs",size=pairs?2:4,count=pairs?4:3;
+    if(!revealed&&!preserve){groupSlots=Array(size*count).fill(null);groupPool=timelineOrder.slice();groupSelected=null;timelineRevealed=false;}
+    timelineCards.replaceChildren();
+    timelineEpisodeHint.hidden=true;
+    timelineInstruction.textContent=revealed?(correct?"Correct groups!":"Correct solution:"):
+      pairs?"Match each episode screenshot to its end tag. Select a picture, then a group slot.":"Group the scenes by episode and order each group: beginning, middle, end, end tag.";
+    timelineBoard.classList.toggle("solved",revealed&&correct);
+    timelineBoard.classList.toggle("incorrect",revealed&&!correct);
+    timelineSubmit.hidden=false;
+    timelineSubmit.disabled=!revealed&&groupSlots.some(x=>!x);
+    timelineSubmit.textContent=revealed?(gameOver?"Play again":"Next round →"):"Check groups";
+    const place=(token,index)=>{
+      if(revealed||remoteBusy||!timelineCanReorder()||!token)return;
+      const from=groupSlots.indexOf(token),old=groupSlots[index];
+      if(from===index)return;
+      if(from>=0)groupSlots[from]=old;
+      else{groupPool=groupPool.filter(id=>id!==token);if(old)groupPool.push(old);}
+      groupSlots[index]=token;groupSelected=null;renderGrouping(false,false,true);
+    };
+    const unplace=token=>{
+      const from=groupSlots.indexOf(token);
+      if(from>=0){groupSlots[from]=null;groupPool.push(token);}
+      groupSelected=null;renderGrouping(false,false,true);
+    };
+    const card=(token,index=-1)=>{
+      const b=document.createElement("button");b.type="button";b.className="group-card";
+      b.classList.toggle("selected",!!token&&groupSelected===token);
+      if(token){const img=document.createElement("img");img.src=currentRound.timelineImages[token];img.alt="Community screenshot";img.draggable=false;b.appendChild(img);}
+      else{b.textContent=pairs?"Drop image":["Beginning","Middle","End","End tag"][index%size];}
+      b.disabled=revealed;
+      b.setAttribute("aria-label",token?"Select screenshot":("Place screenshot in group "+(Math.floor(index/size)+1)+", slot "+(index%size+1)));
+      if(!revealed){
+        b.draggable=!!token;
+        b.addEventListener("dragstart",ev=>{if(token)ev.dataTransfer.setData("text/plain",token);});
+        if(index>=0){
+          b.addEventListener("dragover",ev=>ev.preventDefault());
+          b.addEventListener("drop",ev=>{ev.preventDefault();const id=ev.dataTransfer.getData("text/plain");if(timelineOrder.includes(id))place(id,index);});
+        }
+        b.addEventListener("click",()=>{
+          if(remoteBusy||timelineRevealed)return;
+          if(index>=0&&groupSelected&&groupSelected!==token){place(groupSelected,index);return;}
+          if(token){if(groupSelected===token&&index>=0){unplace(token);return;}groupSelected=groupSelected===token?null:token;renderGrouping(false,false,true);}
+        });
+      }
+      return b;
+    };
+    if(!revealed){
+      const pool=document.createElement("div");pool.className="group-pool";
+      pool.setAttribute("aria-label","Unassigned screenshots");
+      pool.addEventListener("dragover",ev=>ev.preventDefault());
+      pool.addEventListener("drop",ev=>{ev.preventDefault();if(!remoteBusy&&groupSlots.includes(ev.dataTransfer.getData("text/plain")))unplace(ev.dataTransfer.getData("text/plain"));});
+      groupPool.forEach(id=>pool.appendChild(card(id)));
+      timelineCards.appendChild(pool);
+    }
+    const groups=document.createElement("div");groups.className="group-targets";
+    for(let n=0;n<count;n++){
+      const group=document.createElement("section");group.className="group-target";
+      const title=document.createElement("h3");const ep=currentRound.timelineAnswerLabels?.[groupSlots[n*size]];
+      title.textContent=revealed&&byId[ep]?label(byId[ep]):"Group "+(n+1);
+      group.appendChild(title);
+      const slots=document.createElement("div");slots.className="group-slots";slots.style.gridTemplateColumns="repeat("+size+",minmax(0,1fr))";
+      for(let k=0;k<size;k++)slots.appendChild(card(groupSlots[n*size+k],n*size+k));
+      group.appendChild(slots);groups.appendChild(group);
+    }
+    timelineCards.appendChild(groups);
+  }
   function renderTimeline() {
+    timelineBoard.classList.toggle("grouping-board",isGrouping());
+    if(isGrouping()){renderGrouping();return;}
     timelineCards.replaceChildren();
     timelineRevealed=false;
     timelineDragging=null;
-    timelineInstruction.textContent=challenge==="episodeTimeline"
+    timelineInstruction.textContent=gameFormat()==="episodeTimeline"
       ?"All three screenshots are from the same episode. Drag the scenes into beginning, middle and end order."
       :"Drag any part of a card into broadcast order, then release it over another position.";
     timelineBoard.classList.remove("solved","incorrect","reordering");
@@ -1799,7 +1892,7 @@
       const img=document.createElement("img");
       const stored=currentRound.timelineImages[id];
       img.src=stored;
-      img.alt=challenge==="episodeTimeline"?"Scene from the same Community episode":"Unknown Community episode screenshot";
+      img.alt=gameFormat()==="episodeTimeline"?"Scene from the same Community episode":"Unknown Community episode screenshot";
       img.draggable=false;
       img.setAttribute("draggable","false");
       const caption=document.createElement("span");
@@ -1871,6 +1964,10 @@
     });
   }
   async function revealTimelineInPlace(correct) {
+    if(isGrouping()){
+      timelineRevealed=true;groupSlots=timelineSortedIds();groupPool=[];groupSelected=null;
+      renderGrouping(true,correct);return;
+    }
     timelineRevealed=true;
     updateTimelineEpisodeHint();
     timelineDragging=null;
@@ -1882,7 +1979,7 @@
     timelineBoard.classList.remove("solved","incorrect");
     if(needsReorder) {
       timelineBoard.classList.add("reordering");
-      timelineInstruction.textContent=challenge==="episodeTimeline"
+      timelineInstruction.textContent=gameFormat()==="episodeTimeline"
         ?"Moving the scenes into their correct chronological order…"
         :"Moving the cards into the correct broadcast order…";
       // First let every card reach its proper position.
@@ -1890,7 +1987,7 @@
     }
     if(version!==timelineRevealVersion||!isTimeline())return;
     timelineBoard.classList.remove("reordering");
-    if(challenge==="episodeTimeline"){
+    if(gameFormat()==="episodeTimeline"){
       const episode=currentRound?.id && byId[currentRound.id]
         ?label(byId[currentRound.id]):"the episode";
       timelineInstruction.textContent=correct
@@ -1909,7 +2006,7 @@
       if(version!==timelineRevealVersion||!isTimeline())return;
       const card=timelineCards.children[i];
       card.disabled=true;
-      const scene=challenge==="episodeTimeline"?["Beginning","Middle","End"][i]
+      const scene=gameFormat()==="episodeTimeline"?["Beginning","Middle","End"][i]
         :label(byId[currentRound.timelineAnswerLabels[actual[i]]]);
       card.setAttribute("aria-label","Position "+(i+1)+": "+scene);
       const caption=card.querySelector(".timeline-handle");
@@ -1930,7 +2027,7 @@
     timelineBoard.classList.add(correct?"solved":"incorrect");
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=false;
-    timelineSubmit.textContent=correct?(challenge==="episodeTimeline"?"Next episode →":"Next timeline →"):"Play again";
+    timelineSubmit.textContent=gameOver?"Play again":gameFormat()==="episodeTimeline"?"Next episode →":"Next timeline →";
   }
   timelineSubmit.addEventListener("click",()=>{
     if(!isTimeline())return;
@@ -1946,7 +2043,8 @@
       createRound();
       return;
     }
-    answer(timelineOrder.slice());
+    if(isGrouping()&&groupSlots.some(x=>!x))return;
+    answer(isGrouping()?groupSlots.slice():timelineOrder.slice());
   });
   function finishGame(message, finalScore = score) {
     gameOver = true;
@@ -2073,7 +2171,7 @@
     remoteBusy=true;button.disabled=true;timelineSubmit.disabled=true;
     fourChoices.querySelectorAll("button").forEach(b=>b.disabled=true);
     try{
-      const guess=isTimeline()?timelineOrder.slice():value;
+      const guess=isGrouping()?groupSlots.slice():isTimeline()?timelineOrder.slice():value;
       const result=await requestGame("guess",{guess,autoNext:!isTimeline() && !pauseForOriginalAfterGuess()});
       failedOperation=null;retryGame.hidden=true;
       if(version!==epoch)return;
@@ -2135,12 +2233,15 @@
         }
         return;
       }
+      if(isTimeline()&&result.finished){finishGame("Game over! "+(isGrouping()?"Review the correct groups.":"Review the correct order.")+" · Final score: "+score+".",score);return;}
+      if(isTimeline()&&!result.correct){awaitingNext=true;revealTimelineInPlace(false);feedback.textContent="Wrong! "+lives+" lives left.";updateProgress();return;}
       if(result.correct){
         if(isTimeline()){
+          awaitingNext=true;
           revealTimelineInPlace(true);
           timelineSubmit.hidden=false;
-          timelineSubmit.textContent=challenge==="episodeTimeline"?"Next episode →":"Next timeline →";
-          feedback.textContent="Correct! Score: "+score+". Review the order before continuing.";
+          timelineSubmit.textContent=isGrouping()?"Next round →":gameFormat()==="episodeTimeline"?"Next episode →":"Next timeline →";
+          feedback.textContent="Correct! Score: "+score+". Review the solution before continuing.";
           return;
         }
         if(result.finished){

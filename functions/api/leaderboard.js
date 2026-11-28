@@ -4,7 +4,7 @@ import { load, setup as setupGame, json } from "../../src/server/engine.js";
 
 const allowedMode=mode=>typeof mode==="string"&&(
   /^classic:(easy|normal|hard|impossible)$/.test(mode)||
-  /^challenge:(endTags|four|timeline|episodeTimeline|progressive)$/.test(mode)
+  /^challenge:(endTags|noEndTags|endTagPairs|episodeGroups|four|timeline|episodeTimeline|progressive)$/.test(mode)
 );
 async function setup(db){
   await db.prepare("CREATE TABLE IF NOT EXISTS cg_leaderboard (id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT NOT NULL, name TEXT NOT NULL, score INTEGER NOT NULL, created_at INTEGER NOT NULL)").run();

@@ -24,9 +24,14 @@
         <button type="button" data-challenge="one110" class="challenge-link"><span>One Life, 110</span><small>Every episode exactly once. One mistake ends it.</small></button>
         <button type="button" data-challenge="endTags" class="challenge-link"><span>End Tags</span><small>Guess the episode from its closing scene</small></button>
         <button type="button" data-challenge="four" class="challenge-link"><span>Four Choices</span><small>Pick the episode out of four</small></button>
-        <button type="button" data-challenge="timeline" class="challenge-link"><span>Timeline Challenge</span><small>Put three episodes in broadcast order</small></button>
-        <button type="button" data-challenge="episodeTimeline" class="challenge-link"><span>Episode Timeline</span><small>Three scenes from one episode · beginning, middle, end</small></button>
+        <button type="button" data-challenge="endTagPairs" class="challenge-link"><span>End Tag Match</span><small>Match four scenes to their end tags</small></button>
+        <details class="timeline-menu"><summary class="challenge-link"><span>Timeline Games</span><small>Choose a timeline challenge</small></summary>
+          <button type="button" data-challenge="timeline" class="challenge-link"><span>Timeline Challenge</span><small>Put three episodes in broadcast order</small></button>
+          <button type="button" data-challenge="episodeTimeline" class="challenge-link"><span>Episode Timeline</span><small>Three scenes from one episode · beginning, middle, end</small></button>
+          <button type="button" data-challenge="episodeGroups" class="challenge-link"><span>Mixed Episode Timeline</span><small>Group and order twelve scenes from three episodes</small></button>
+        </details>
         <button type="button" data-challenge="progressive" class="challenge-link"><span>Progressive Reveal</span><small>Sharpen the picture · fewer hints, more points</small></button>
+        <button type="button" data-challenge="noEndTags" class="challenge-link"><span>No End Tags</span><small>Guess the episode from main scenes only</small></button>
         <div class="challenge-divider" role="separator"><span>MAKE IT YOUR OWN</span><small>Or build a game with your own rules.</small></div>
         <button type="button" data-challenge="custom" class="challenge-link custom-menu-link"><span>+ Custom Game</span><small>Choose seasons and 1–10 lives</small></button>
       </nav>
@@ -53,6 +58,7 @@
           <label><input type="checkbox" value="6" data-custom-season checked> Season 6</label>
         </fieldset>
 
+        <div class="custom-field"><label for="custom-format">Game type</label><select id="custom-format"><option value="">Episode guessing</option><option value="timeline">Timeline Challenge</option><option value="episodeTimeline">Episode Timeline</option><option value="endTagPairs">End Tag Match</option><option value="episodeGroups">Mixed Episode Timeline</option></select></div>
         <div class="custom-combos">
           <h3>Combine game mechanics</h3>
           <p>Mix your favorite features in one game.</p>
@@ -62,6 +68,7 @@
           </fieldset>
           <fieldset class="custom-modifiers"><legend>Image mechanics</legend>
             <label class="custom-modifier"><input type="checkbox" id="custom-end-tags"><span><strong>End tags only</strong><small>Only screenshots from the closing scenes (pilot excluded)</small></span></label>
+            <label class="custom-modifier"><input type="checkbox" id="custom-no-end-tags"><span><strong>No end tags</strong><small>Only screenshots before the closing scene</small></span></label>
             <label class="custom-modifier"><input type="checkbox" id="custom-three"><span><strong>Three screenshots</strong><small>Beginning, middle and end of the same episode</small></span></label>
             <label class="custom-modifier"><input type="checkbox" id="custom-reveal"><span><strong>Progressive Reveal</strong><small>Reveal more detail for fewer points</small></span></label>
             <label class="custom-modifier"><input type="checkbox" id="custom-distort"><span><strong>Impossible effects</strong><small>Random colors, zoom, rotation and pixelation</small></span></label>

@@ -16,6 +16,13 @@ const END_TAG_START = {
   // Season 6
   S06E01:500, S06E02:497, S06E03:443, S06E04:579, S06E05:520, S06E06:527, S06E07:533, S06E08:526, S06E09:545, S06E10:465, S06E11:523, S06E12:489, S06E13:495
 };
+const formats=["timeline","episodeTimeline","endTagPairs","episodeGroups"];
+const formatFor=c=>c.challenge==="custom" ? c.format : c.challenge;
+const grouping=c=>["endTagPairs","episodeGroups"].includes(formatFor(c));
+const ordering=c=>formats.includes(formatFor(c));
+const noEndTags=c=>c.challenge==="noEndTags" || (c.challenge==="custom" && c.features.noEndTags===true);
+const bodyFrames=episode=>COMMUNITY_FRAME_NUMBERS[episode].filter(n=>END_TAG_START[episode]===undefined||n<END_TAG_START[episode]);
+const tagFrames=episode=>COMMUNITY_FRAME_NUMBERS[episode].filter(n=>END_TAG_START[episode]!==undefined&&n>=END_TAG_START[episode]);
 const endTagsEnabled = c => c.challenge==="endTags" || (c.challenge==="custom" && c.features.endTags===true);
 
 const now = () => Date.now();
@@ -38,7 +45,7 @@ export function berlinDate() {
 
 export function configFrom(input) {
   const c = typeof input === "object" && input !== null ? input : {};
-  const challenge = ["classic","custom","daily","communityle","one110","endTags","four","timeline","episodeTimeline","progressive"].includes(c.challenge)
+  const challenge = ["classic","custom","daily","communityle","one110","endTags","noEndTags","endTagPairs","episodeGroups","four","timeline","episodeTimeline","progressive"].includes(c.challenge)
     ? c.challenge : "classic";
   const mode = ["easy","normal","hard","impossible"].includes(c.mode) ? c.mode : "normal";
   const lives = Number.isInteger(c.lives) && c.lives>=1 && c.lives<=10 ? c.lives : 3;
@@ -48,17 +55,20 @@ export function configFrom(input) {
   if (!seasons.length) throw new Error("Choose at least one season.");
   const f = c.features && typeof c.features==="object" ? c.features : {};
   const features = Object.fromEntries(["four","numbers","three","reveal","distort","once"].map(k=>[k,f[k]===true]));
-  features.endTags=challenge==="custom"&&f.endTags===true;
+  const format=challenge==="custom"&&formats.includes(c.format)?c.format:null;
+  if(format)for(const k of Object.keys(features))features[k]=false;
+  features.endTags=challenge==="custom"&&!format&&f.endTags===true;
+  features.noEndTags=challenge==="custom"&&!features.endTags&&!["endTagPairs","episodeGroups"].includes(format)&&f.noEndTags===true;
   // Hiding solved answers is exclusively a Custom Game sub-option of Once.
   features.hideSolved=challenge==="custom"&&features.once&&f.hideSolved===true;
-  return {challenge,mode,lives,seasons,features};
+  return {challenge,mode,lives,seasons,features,...(format?{format}:{})};
 }
 export function keyFor(c,date=berlinDate()) {
   switch(c.challenge) {
     case "classic":return "classic:"+c.mode;
     case "custom":return "custom:"+c.lives+":"+c.seasons.join("-")+":"+
       ["four","numbers","three","reveal","distort","once"].map(k=>c.features[k]?"1":"0").join("")+
-      (c.features.hideSolved?"h":"")+(c.features.endTags?"e":"");
+      (c.features.hideSolved?"h":"")+(c.features.endTags?"e":"")+(c.features.noEndTags?"n":"")+(c.format?":"+c.format:"");
     case "daily":return "daily:"+date;
     case "communityle":return "communityle:"+date;
     default:return "challenge:"+c.challenge;
@@ -66,7 +76,7 @@ export function keyFor(c,date=berlinDate()) {
 }
 export function eligible(c) {
   return EPISODES.filter(e=>(c.challenge!=="custom"||c.seasons.includes(Number(e.slice(1,3))))&&
-    (!endTagsEnabled(c)|| (END_TAG_START[e]!==undefined && COMMUNITY_FRAME_NUMBERS[e].some(n=>n>=END_TAG_START[e]))));
+    (!endTagsEnabled(c)||tagFrames(e).length>0)&&(!noEndTags(c)||bodyFrames(e).length>0));
 }
 // Rejection sampling prevents modulo bias.
 export function secureRandomInt(maxExclusive) {
@@ -84,9 +94,9 @@ function shuffled(array) {
   for(let i=a.length-1;i>0;i--){const j=secureRandomInt(i+1);[a[i],a[j]]=[a[j],a[i]];}
   return a;
 }
-function chooseFrames(episode,three=false,endTags=false) {
+function chooseFrames(episode,three=false,endTags=false,excludeTags=false) {
   const all=COMMUNITY_FRAME_NUMBERS[episode];
-  const frames=endTags?all.filter(n=>n>=END_TAG_START[episode]):all;
+  const frames=endTags?tagFrames(episode):excludeTags?bodyFrames(episode):all;
   if(!Array.isArray(frames)||!frames.length)throw new Error("Frame catalogue is empty.");
   if(three&&frames.length>=3)return [0,1,2].map(part=>{
     const begin=Math.floor(part*frames.length/3),end=Math.floor((part+1)*frames.length/3);
@@ -94,8 +104,8 @@ function chooseFrames(episode,three=false,endTags=false) {
   });
   return [oneOf(frames)];
 }
-function episodeTimelineFrames(episode) {
-  const frames=COMMUNITY_FRAME_NUMBERS[episode];
+function episodeTimelineFrames(episode,excludeTags=false) {
+  const frames=excludeTags?bodyFrames(episode):COMMUNITY_FRAME_NUMBERS[episode];
   // Widely separated moments, sampled afresh for every round. No new assets.
   const spans=[[0.05,0.28],[0.39,0.61],[0.72,0.95]];
   return spans.map(([low,high])=>{
@@ -174,10 +184,22 @@ async function makeRound(db,s) {
     s.current={episode:selected.episode,images:[imageEntry(selected.episode,selected.frame)]};
     return;
   }
-  if(c.challenge==="episodeTimeline"){
-    const pool=eligible(c).filter(episode=>COMMUNITY_FRAME_NUMBERS[episode].length>=9);
+  if(grouping(c)){
+    const count=formatFor(c)==="endTagPairs"?4:3;
+    const pool=eligible(c).filter(ep=>bodyFrames(ep).length>=9&&tagFrames(ep).length>0);
+    if(pool.length<count)throw new Error("Choose seasons with at least "+count+" eligible episodes.");
+    const picks=shuffled(pool).slice(0,count);
+    const items=shuffled(picks.flatMap(ep=>{
+      const scenes=count===4?[oneOf(bodyFrames(ep))]:episodeTimelineFrames(ep,true);
+      return [...scenes,oneOf(tagFrames(ep))].map(frame=>imageEntry(ep,frame));
+    }));
+    s.current={timeline:items,images:items};
+    return;
+  }
+  if(formatFor(c)==="episodeTimeline"){
+    const pool=eligible(c).filter(episode=>(noEndTags(c)?bodyFrames(episode):COMMUNITY_FRAME_NUMBERS[episode]).length>=9);
     const episode=oneOf(pool);
-    const chronological=episodeTimelineFrames(episode);
+    const chronological=episodeTimelineFrames(episode,noEndTags(c));
     const items=chronological.map(frame=>imageEntry(episode,frame));
     let order;
     if(secureChance(1,10))order=items.slice();
@@ -189,8 +211,9 @@ async function makeRound(db,s) {
     s.current={episode,timeline:order,images:order};
     return;
   }
-  if(c.challenge==="timeline"){
+  if(formatFor(c)==="timeline"){
     const picks=shuffled(eligible(c)).slice(0,3);
+    if(picks.length!==3)throw new Error("Choose at least three eligible episodes.");
     const chronological=picks.slice().sort((a,b)=>EPISODES.indexOf(a)-EPISODES.indexOf(b));
     let order;
     if(secureChance(1,10))order=chronological.slice();
@@ -199,7 +222,7 @@ async function makeRound(db,s) {
       if(order.every((id,i)=>id===chronological[i]))
         [order[0],order[1]]=[order[1],order[0]];
     }
-    const items=order.map(episode=>imageEntry(episode,chooseFrames(episode)[0]));
+    const items=order.map(episode=>imageEntry(episode,chooseFrames(episode,false,false,noEndTags(c))[0]));
     s.current={timeline:items,images:items};
     return;
   }
@@ -215,13 +238,18 @@ async function makeRound(db,s) {
   const episode=oneOf(options.length?options:remaining);
   s.previous=episode;
   s.seen.push(episode);
-  const frames=chooseFrames(episode,threeEnabled(c),endTagsEnabled(c)).map(frame=>imageEntry(episode,frame));
+  const frames=chooseFrames(episode,threeEnabled(c),endTagsEnabled(c),noEndTags(c)).map(frame=>imageEntry(episode,frame));
   const solved=c.challenge==="custom"&&c.features.hideSolved
     ?new Set(s.history.filter(h=>h.correct).map(h=>h.episode)):null;
   const choices=fourEnabled(c)?shuffled([
     episode,...shuffled(pool.filter(id=>id!==episode&&(!solved||!solved.has(id)))).slice(0,3)
   ]):undefined;
   s.current={episode,images:frames,...(choices?{choices}:{})};
+}
+function timelineSolution(s){
+  return s.current.timeline.slice().sort((a,b)=>formatFor(s.config)==="episodeTimeline"?a.frame-b.frame:
+    EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode)||a.frame-b.frame)
+    .map(im=>({token:im.token,episode:im.episode}));
 }
 export function publicState(s) {
   const current=s.current;
@@ -240,18 +268,14 @@ export function publicState(s) {
   if(current){
     result.round={
       images:current.images.map(im=>imageUrl(s,im)),
-      ...(s.config.challenge==="episodeTimeline"&&current.episodeHintShown
+      ...(formatFor(s.config)==="episodeTimeline"&&current.episodeHintShown
         ?{episodeHint:current.episode}:{}),
       ...(current.choices?{choices:current.choices}:{}),
       ...(current.timeline?{timeline:current.timeline.map(im=>({token:im.token,url:imageUrl(s,im)}))}:{})
     };
     if(s.finished||s.awaitingNext) {
       if(current.episode)result.revealedEpisode=current.episode;
-      if(current.timeline)result.timelineSolution=current.timeline.slice()
-        .sort((a,b)=>s.config.challenge==="episodeTimeline"
-          ?a.frame-b.frame
-          :EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode))
-        .map(im=>({token:im.token,episode:im.episode}));
+      if(current.timeline)result.timelineSolution=timelineSolution(s);
     }
   }
   if(s.finished&&s.config.challenge==="communityle")result.revealedEpisode=current?.episode;
@@ -299,7 +323,7 @@ export async function action(db,payload) {
   if(s.finished)return json({error:"This game is finished.",...publicState(s),submitted:row.submitted===1},409);
   if(payload.action==="episodeHint"){
     // Only reveal the episode's identity, never its internal scene order.
-    if(c.challenge!=="episodeTimeline"||!s.current||s.awaitingNext)
+    if(formatFor(c)!=="episodeTimeline"||!s.current||s.awaitingNext)
       return json({error:"Episode hint is unavailable."},409);
     if(!s.current.episodeHintShown){
       s.current.episodeHintShown=true;
@@ -338,15 +362,23 @@ export async function action(db,payload) {
       ...(s.finished?{answer:s.current.episode}:{})});
   }
   let correct=false,guess=payload.guess;
-  if(c.challenge==="timeline"||c.challenge==="episodeTimeline"){
+  if(ordering(c)){
     const tokens=s.current.timeline.map(x=>x.token);
-    if(!Array.isArray(guess)||guess.length!==3||new Set(guess).size!==3||
+    if(!Array.isArray(guess)||guess.length!==tokens.length||new Set(guess).size!==tokens.length||
       !guess.every(token=>tokens.includes(token)))return json({error:"Invalid timeline order."},400);
-    const expected=s.current.timeline.slice().sort((a,b)=>
-      c.challenge==="episodeTimeline"
-        ?a.frame-b.frame
-        :EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode)).map(x=>x.token);
-    correct=guess.every((id,i)=>id===expected[i]);
+    if(grouping(c)){
+      const size=formatFor(c)==="endTagPairs"?2:4;
+      const byToken=new Map(s.current.timeline.map(im=>[im.token,im]));
+      correct=true;
+      for(let i=0;i<guess.length;i+=size){
+        const group=guess.slice(i,i+size).map(token=>byToken.get(token));
+        if(!group.every(im=>im.episode===group[0].episode)||
+          (size===4&&!group.every((im,k)=>k===0||im.frame>group[k-1].frame)))correct=false;
+      }
+    }else{
+      const expected=timelineSolution(s).map(x=>x.token);
+      correct=guess.every((id,i)=>id===expected[i]);
+    }
   } else {
     if(typeof guess!=="string"||!EPISODE_SET.has(guess)||
       c.challenge==="custom"&&!eligible(c).includes(guess)||
@@ -374,16 +406,12 @@ export async function action(db,payload) {
   // Normal correct answers can select the next frame in the SAME API call.
   // Timeline and incorrect guesses retain their deliberate reveal/Next step.
   let autoAdvanced=false;
-  if(payload.autoNext===true&&correct&&s.awaitingNext&&!["timeline","episodeTimeline"].includes(c.challenge)){
+  if(payload.autoNext===true&&correct&&s.awaitingNext&&!ordering(c)){
     s.awaitingNext=false;s.stage=1;
     await makeRound(db,s);
     autoAdvanced=true;
   }
   if(!await persist(db,row))return json({error:"Please retry."},409);
   return json({...publicState(s),correct,answer:completedEpisode,autoAdvanced,
-    ...(s.current.timeline?{timelineSolution:s.current.timeline.slice()
-      .sort((a,b)=>c.challenge==="episodeTimeline"
-        ?a.frame-b.frame
-        :EPISODES.indexOf(a.episode)-EPISODES.indexOf(b.episode))
-      .map(im=>({token:im.token,episode:im.episode}))}:{})});
+    ...(s.current.timeline?{timelineSolution:timelineSolution(s)}:{})});
 }
