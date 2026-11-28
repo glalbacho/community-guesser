@@ -89,3 +89,11 @@ test("Grouping uses real pointer-driven card movement and captured drop targets"
   assert.match(grouping,/groupDropTarget/);
   assert.doesNotMatch(grouping,/dataTransfer/);
 });
+
+test("Meme picker uses visible images and pointer drop target",()=>{
+  assert.match(html,/id="meme-frame-picker"/);
+  assert.match(game,/memePicker\.showModal\(\)/);
+  assert.match(game,/paintFrame\(frame,preview,true\)/);
+  assert.match(game,/memeDropHit\(event\.clientX,event\.clientY\)/);
+  assert.match(game,/importMemeFrame\(b\.querySelector\("img"\)\)/);
+});

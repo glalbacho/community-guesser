@@ -89,6 +89,56 @@ export function secureRandomInt(maxExclusive) {
 }
 export const secureChance=(numerator,denominator)=>secureRandomInt(denominator)<numerator;
 function oneOf(arr) {return arr[secureRandomInt(arr.length)];}
+// Integer relative weights avoid floating point and modulo bias.
+export const COOLDOWN_TIMEOUT=3*60*60*1000;
+const ageWeight=age=>age===1?10:age<=3?25:age<=5?50:age<=7?75:100;
+export function cooldownWeight(recent,episode){
+  const age=Math.min(...recent.filter(x=>x.episode===episode).map(x=>x.age),Infinity);
+  return ageWeight(age);
+}
+export function compressCooldown(recent){
+  const seen=new Set(),result=[];
+  for(const item of recent.slice().sort((a,b)=>a.age-b.age)){
+    if(seen.has(item.episode))continue;
+    seen.add(item.episode);result.push({episode:item.episode,age:1+2*(result.length)});
+    if(result.length===4)break;
+  }
+  return result;
+}
+function recentFrom(s){
+  if(Array.isArray(s.cooldown))return s.cooldown;
+  // Migrate sessions created before the cooldown release without exposing answers.
+  const rounds=(s.history||[]).map(h=>h.images||[]);
+  if(s.current&&!s.awaitingNext&&!s.finished)rounds.push(s.current.images||[]);
+  let recent=[];
+  for(const images of rounds)for(const episode of new Set(images.map(im=>im.episode))){
+    recent=recent.map(x=>({...x,age:x.age+1})).filter(x=>x.age<=7&&x.episode!==episode);
+    recent.unshift({episode,age:1});
+  }
+  return recent;
+}
+function currentCooldown(s){
+  return s.cooldownAt&&now()-s.cooldownAt>=COOLDOWN_TIMEOUT?[]:recentFrom(s);
+}
+function rememberEpisodes(s,episodes){
+  let recent=currentCooldown(s);
+  for(const episode of episodes){
+    recent=recent.map(x=>({...x,age:x.age+1})).filter(x=>x.age<=7&&x.episode!==episode);
+    recent.unshift({episode,age:1});
+  }
+  s.cooldown=recent;s.cooldownAt=now();
+}
+function weightedPicks(s,pool,count){
+  const remaining=pool.slice(),selected=[],recent=currentCooldown(s);
+  for(let i=0;i<count;i++){
+    const weights=remaining.map(ep=>cooldownWeight(recent,ep));
+    let ticket=secureRandomInt(weights.reduce((a,b)=>a+b,0)),index=0;
+    while(ticket>=weights[index])ticket-=weights[index++];
+    selected.push(remaining.splice(index,1)[0]);
+  }
+  rememberEpisodes(s,selected);
+  return selected;
+}
 function shuffled(array) {
   const a=array.slice();
   for(let i=a.length-1;i>0;i--){const j=secureRandomInt(i+1);[a[i],a[j]]=[a[j],a[i]];}
@@ -188,7 +238,7 @@ async function makeRound(db,s) {
     const count=formatFor(c)==="endTagPairs"?4:3;
     const pool=eligible(c).filter(ep=>bodyFrames(ep).length>=9&&tagFrames(ep).length>0);
     if(pool.length<count)throw new Error("Choose seasons with at least "+count+" eligible episodes.");
-    const picks=shuffled(pool).slice(0,count);
+    const picks=weightedPicks(s,pool,count);
     const items=shuffled(picks.flatMap(ep=>{
       const scenes=count===4?[oneOf(bodyFrames(ep))]:episodeTimelineFrames(ep,true);
       return [...scenes,oneOf(tagFrames(ep))].map(frame=>imageEntry(ep,frame));
@@ -198,7 +248,7 @@ async function makeRound(db,s) {
   }
   if(formatFor(c)==="episodeTimeline"){
     const pool=eligible(c).filter(episode=>(noEndTags(c)?bodyFrames(episode):COMMUNITY_FRAME_NUMBERS[episode]).length>=9);
-    const episode=oneOf(pool);
+    const episode=weightedPicks(s,pool,1)[0];
     const chronological=episodeTimelineFrames(episode,noEndTags(c));
     const items=chronological.map(frame=>imageEntry(episode,frame));
     let order;
@@ -212,8 +262,9 @@ async function makeRound(db,s) {
     return;
   }
   if(formatFor(c)==="timeline"){
-    const picks=shuffled(eligible(c)).slice(0,3);
-    if(picks.length!==3)throw new Error("Choose at least three eligible episodes.");
+    const pool=eligible(c);
+    if(pool.length<3)throw new Error("Choose at least three eligible episodes.");
+    const picks=weightedPicks(s,pool,3);
     const chronological=picks.slice().sort((a,b)=>EPISODES.indexOf(a)-EPISODES.indexOf(b));
     let order;
     if(secureChance(1,10))order=chronological.slice();
@@ -228,16 +279,18 @@ async function makeRound(db,s) {
   }
   const pool=eligible(c);
   const neverRepeat=c.challenge==="one110"||c.challenge==="custom"&&c.features.once;
-  const available=pool.filter(id=>!s.seen.includes(id));
-  if(!available.length) {
-    if(neverRepeat){s.finished=true;s.current=null;return;}
-    s.seen=[];
+  let episode;
+  if(neverRepeat){
+    const available=pool.filter(id=>!s.seen.includes(id));
+    if(!available.length){s.finished=true;s.current=null;return;}
+    episode=oneOf(available);
+    s.seen.push(episode);
+    rememberEpisodes(s,[episode]);
+  }else{
+    // All eligible episodes remain possible, including the immediately previous one.
+    episode=weightedPicks(s,pool,1)[0];
   }
-  const remaining=pool.filter(id=>!s.seen.includes(id));
-  const options=remaining.length>1?remaining.filter(id=>id!==s.previous):remaining;
-  const episode=oneOf(options.length?options:remaining);
   s.previous=episode;
-  s.seen.push(episode);
   const frames=chooseFrames(episode,threeEnabled(c),endTagsEnabled(c),noEndTags(c)).map(frame=>imageEntry(episode,frame));
   const solved=c.challenge==="custom"&&c.features.hideSolved
     ?new Set(s.history.filter(h=>h.correct).map(h=>h.episode)):null;
@@ -281,7 +334,7 @@ export function publicState(s) {
   if(s.finished&&s.config.challenge==="communityle")result.revealedEpisode=current?.episode;
   return result;
 }
-export async function start(db,settings,resumeId) {
+export async function start(db,settings,resumeId,previousSessionId) {
   const config=configFrom(settings),date=berlinDate(),mode=keyFor(config,date);
   if(resumeId){
     const existing=await load(db,resumeId);
@@ -293,9 +346,15 @@ export async function start(db,settings,resumeId) {
         config.challenge==="communityle"||config.challenge==="one110"))
       return {...publicState(existing.state),submitted:existing.submitted===1};
   }
+  const previous=await load(db,previousSessionId);
+  let cooldown=[];
+  if(previous&&now()-(previous.state.cooldownAt||previous.updated_at)<COOLDOWN_TIMEOUT){
+    cooldown=recentFrom(previous.state);
+    if(previous.state.finished&&previous.state.history?.at(-1)?.correct===false)cooldown=compressCooldown(cooldown);
+  }
   const s={id:uuid(),config,date,mode,score:0,lives:config.challenge==="custom"?config.lives:1,
     answered:0,seen:[],previous:null,current:null,finished:false,awaitingNext:false,
-    history:[],guesses:[],stage:1};
+    history:[],guesses:[],stage:1,cooldown,cooldownAt:now()};
   await makeRound(db,s);
   await db.prepare("INSERT INTO cg_sessions (id,mode,state,updated_at) VALUES (?,?,?,?)")
     .bind(s.id,mode,JSON.stringify(s),now()).run();
@@ -311,7 +370,7 @@ export async function action(db,payload) {
   if(!payload||typeof payload!=="object")return json({error:"Invalid request."},400);
   if(payload.action==="start"){
     let result;
-    try{result=await start(db,payload.settings,payload.resume);}catch(e){return json({error:e.message},400);}
+    try{result=await start(db,payload.settings,payload.resume,payload.previousSession);}catch(e){return json({error:e.message},400);}
     return json(result);
   }
   const row=await load(db,payload.session);
@@ -346,6 +405,9 @@ export async function action(db,payload) {
   }
   if(payload.action!=="guess")return json({error:"Unsupported action."},400);
   if(s.awaitingNext||!s.current)return json({error:"Complete or advance the current round first."},409);
+  // Inactivity is measured from the last actual play, not a stale page view.
+  if(s.cooldownAt&&now()-s.cooldownAt>=COOLDOWN_TIMEOUT)s.cooldown=[];
+  s.cooldownAt=now();
   if(c.challenge==="communityle"){
     const guess=payload.guess;
     if(typeof guess!=="string"||!EPISODE_SET.has(guess)||s.guesses.some(g=>g.id===guess))

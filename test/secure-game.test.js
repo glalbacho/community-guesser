@@ -571,3 +571,39 @@ test("Custom grouped round uses selected seasons and lives",async()=>{
   const result=await call(db,{action:"guess",session:round.session,guess:ordered.map(x=>x.token)});
   assert.equal(result.correct,false);assert.equal(result.lives,2);assert.equal(result.awaitingNext,true);
 });
+
+test("Soft cooldown weights and compressed restart weights",async()=>{
+  const {cooldownWeight,compressCooldown}=await import("../src/server/engine.js");
+  const recent=EPISODES.slice(0,7).map((episode,i)=>({episode,age:i+1}));
+  assert.deepEqual(EPISODES.slice(0,8).map(ep=>cooldownWeight(recent,ep)),[10,25,25,50,50,75,75,100]);
+  const compressed=compressCooldown(recent);
+  assert.deepEqual(EPISODES.slice(0,5).map(ep=>cooldownWeight(compressed,ep)),[10,25,50,75,100]);
+});
+test("Regular rounds do not exclude seen episodes; once retains its exclusion",async()=>{
+  const db=createDb();await setup(db);
+  for(const settings of [{challenge:"classic"},{challenge:"custom",seasons:[2],features:{once:true}}]){
+    const round=await start(db,settings);const original=privateGame(db,round.session);
+    const current=original.current.episode;
+    const row=db.sessions.get(round.session);
+    original.seen=settings.features?.once?[current]:EPISODES.slice();
+    original.awaitingNext=true;row.state=JSON.stringify(original);
+    const next=await call(db,{action:"next",session:round.session});
+    assert.ok(next.round);const state=privateGame(db,round.session);
+    if(settings.features?.once)assert.notEqual(state.current.episode,current);
+    else assert.deepEqual(state.seen,EPISODES);
+  }
+});
+test("New game inherits only actual episode history and drops expired history",async()=>{
+  const db=createDb();await setup(db);
+  const first=await start(db,{challenge:"classic"});const row=db.sessions.get(first.session);
+  const old=privateGame(db,first.session);const answer=old.current.episode;
+  const wrong=EPISODES.find(ep=>ep!==answer);
+  await call(db,{action:"guess",session:first.session,guess:wrong});
+  const next=await start(db,{challenge:"classic"},null,first.session);
+  const history=privateGame(db,next.session).cooldown;
+  assert.ok(history.some(x=>x.episode===answer));
+  row.updated_at=Date.now()-4*60*60*1000;
+  const expired=JSON.parse(row.state);expired.cooldownAt=row.updated_at;row.state=JSON.stringify(expired);
+  const fresh=await start(db,{challenge:"classic"},null,first.session);
+  assert.equal(privateGame(db,fresh.session).cooldown.length,1);
+});

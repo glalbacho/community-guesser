@@ -253,6 +253,8 @@
   let sessionId = null, remoteBusy = false, hasBooted = false;
   let communityleHints = {}, communityleCompleted = false;
   const sessionStoreKey = () => "community-guesser-session-v2:" + boardKey();
+  const cooldownSessionKey="community-guesser-cooldown-session-v1";
+  const sharesCooldown=()=>challenge!=="daily"&&challenge!=="communityle";
   function gameSettings() {
     return {challenge,mode,lives:customLives,
       seasons:customSeasons.slice(),format:customFormat,features:{...customFeatures,noEndTags:customNoEndTags}};
@@ -1247,19 +1249,128 @@
   highscoresRefresh.addEventListener("click",()=>{if(highscoresOpenState)loadAllHighscores();});
   memeOpen.addEventListener("click",()=>navigateTo("meme"));
   memeBack.addEventListener("click",()=>navigateTo("game"));
-  memeFromGame.addEventListener("click",()=>{
-    // Timeline rounds display three cards, all other challenges show one
-    // current frame (or the selected Easy-mode frame) in the viewer.
-    const source=isTimeline()
-      ?timelineCards.querySelector("img")
-      :imageBox.querySelector("canvas, img");
-    if(!source){
-      feedback.textContent="Wait until a screenshot is visible before making a meme.";
+  const memePicker=$("meme-frame-picker"),memePickerGrid=$("meme-picker-grid");
+  const memePickerClose=$("meme-picker-close");
+  function closeMemePicker(){
+    if(memePicker?.open)memePicker.close();
+    memePickerGrid?.replaceChildren();
+  }
+  function importMemeFrame(source){
+    if(!source)return;
+    // Import synchronously while the source still has its visible rendering.
+    window.dispatchEvent(new CustomEvent("community:meme-import",{detail:{source}}));
+    closeMemePicker();
+    navigateTo("meme");
+  }
+  function openMemePicker(){
+    if(!currentRound||remoteBusy)return;
+    const timelineImages=isTimeline()?Array.from(timelineCards.querySelectorAll("img")):[];
+    const frames=currentRound.frames||[];
+    const visible=imageBox.querySelector("canvas, img");
+    const count=isTimeline()?timelineImages.length:frames.length;
+    if(count<=1){
+      const source=isTimeline()?timelineImages[0]:visible;
+      if(source)importMemeFrame(source);
+      else feedback.textContent="Wait until a screenshot is visible before making a meme.";
       return;
     }
-    window.dispatchEvent(new CustomEvent("community:meme-import",{detail:{source}}));
-    navigateTo("meme");
-  });
+    memePickerGrid.replaceChildren();
+    const round=currentRound;
+    const add=(index,source,frame)=>{
+      const choice=document.createElement("button");
+      choice.type="button";choice.className="meme-picker-card";
+      choice.setAttribute("aria-label","Use frame "+(index+1));
+      const preview=document.createElement("div");preview.className="meme-picker-preview";
+      choice.appendChild(preview);memePickerGrid.appendChild(choice);
+      const paint=()=>{
+        if(currentRound!==round||!choice.isConnected)return;
+        if(source){
+          const img=source.cloneNode(true);img.draggable=false;preview.replaceChildren(img);
+          if(!source.complete||!source.naturalWidth){choice.disabled=true;img.addEventListener("load",()=>{choice.disabled=false;},{once:true});return;}
+        }else if(frame?.status==="ready")paintFrame(frame,preview,true);
+        else{preview.textContent=frame?.status==="error"?"Image unavailable":"Loading…";choice.disabled=true;return;}
+        choice.disabled=false;
+      };
+      paint();
+      if(frame?.status==="loading"||frame?.status==="pending")frame.ready?.then(paint);
+      else if(frame&&frame.status!=="ready"&&frame.status!=="error")frame.ready?.then(paint);
+      choice.addEventListener("click",()=>importMemeFrame(preview.querySelector("img, canvas")));
+    };
+    if(isTimeline())timelineImages.forEach((source,index)=>add(index,source,null));
+    else frames.forEach((frame,index)=>add(index,null,frame));
+    if(!memePicker.open)memePicker.showModal();
+  }
+  memeFromGame.addEventListener("click",openMemePicker);
+  memePickerClose?.addEventListener("click",closeMemePicker);
+  memePicker?.addEventListener("click",ev=>{if(ev.target===memePicker)closeMemePicker();});
+  memePicker?.addEventListener("close",()=>memePickerGrid.replaceChildren());
+  function memeDropHit(x,y){
+    const r=memeFromGame.getBoundingClientRect();
+    return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;
+  }
+  function highlightMemeDrop(x,y){
+    if(!memeFromGame.classList.contains("meme-drop-ready")){
+      const r=memeFromGame.getBoundingClientRect();
+      if(r.bottom>window.innerHeight||r.top<0)memeFromGame.classList.add("meme-floating-drop");
+      memeFromGame.classList.add("meme-drop-ready");
+    }
+    memeFromGame.classList.toggle("meme-drop-hover",memeDropHit(x,y));
+  }
+  function clearMemeDrop(){
+    memeFromGame.classList.remove("meme-drop-ready","meme-drop-hover","meme-floating-drop");
+  }
+  // Drag single-view screenshots and already-revealed cards to the same target.
+  // Active ordering cards use their own pointer handlers below.
+  let standaloneMemeDrag=null;
+  function cancelStandaloneMemeDrag(){
+    const drag=standaloneMemeDrag;standaloneMemeDrag=null;
+    if(drag){drag.ghost?.remove();if(drag.node.hasPointerCapture?.(drag.pointerId))drag.node.releasePointerCapture(drag.pointerId);}
+    clearMemeDrop();
+  }
+  function bindStandaloneMemeDrag(container){
+    container.addEventListener("pointerdown",ev=>{
+      if(ev.button!==0||remoteBusy||memePicker?.open||standaloneMemeDrag)return;
+      if(container===timelineCards&&timelineCanReorder())return;
+      // Preserve horizontal swipe on the existing three-image viewer.
+      if(container===imageBox&&threeEnabled()&&ev.pointerType==="touch")return;
+      const card=ev.target.closest?.(".timeline-card,.group-card");
+      const source=container===imageBox?container.querySelector("canvas, img"):card?.querySelector("img");
+      if(!source)return;
+      const node=container===imageBox?container:card;
+      standaloneMemeDrag={source,node,pointerId:ev.pointerId,x:ev.clientX,y:ev.clientY,ghost:null};
+      node.setPointerCapture?.(ev.pointerId);
+    });
+    container.addEventListener("pointermove",ev=>{
+      const drag=standaloneMemeDrag;
+      if(!drag||drag.pointerId!==ev.pointerId)return;
+      if(!drag.ghost&&Math.hypot(ev.clientX-drag.x,ev.clientY-drag.y)<6)return;
+      ev.preventDefault();
+      if(!drag.ghost){
+        const ghost=document.createElement("canvas"),r=drag.source.getBoundingClientRect();
+        ghost.width=Math.max(1,Math.min(320,Math.round(r.width)));
+        ghost.height=Math.max(1,Math.round(ghost.width*r.height/Math.max(1,r.width)));
+        const ctx=ghost.getContext("2d"),style=getComputedStyle(drag.source);
+        if(!ctx){cancelStandaloneMemeDrag();return;}
+        if(style.filter!=="none")ctx.filter=style.filter;
+        try{ctx.drawImage(drag.source,0,0,ghost.width,ghost.height);}catch(_){cancelStandaloneMemeDrag();return;}
+        ghost.className="meme-drag-ghost";document.body.appendChild(ghost);drag.ghost=ghost;
+      }
+      drag.ghost.style.left=ev.clientX+"px";drag.ghost.style.top=ev.clientY+"px";
+      highlightMemeDrop(ev.clientX,ev.clientY);
+    });
+    container.addEventListener("pointerup",ev=>{
+      const drag=standaloneMemeDrag;
+      if(!drag||drag.pointerId!==ev.pointerId)return;
+      const hit=!!drag.ghost&&memeDropHit(ev.clientX,ev.clientY);
+      cancelStandaloneMemeDrag();
+      if(hit){ev.preventDefault();importMemeFrame(drag.source);}
+    });
+    container.addEventListener("pointercancel",cancelStandaloneMemeDrag);
+    container.addEventListener("lostpointercapture",()=>{if(standaloneMemeDrag)cancelStandaloneMemeDrag();});
+    container.addEventListener("dragstart",ev=>ev.preventDefault());
+  }
+  bindStandaloneMemeDrag(imageBox);
+  bindStandaloneMemeDrag(timelineCards);
 
   function updateShell() {
     menuPickerMark();
@@ -1305,9 +1416,10 @@
     });
   }
   function applyServerRound(data) {
+    closeMemePicker();cancelStandaloneMemeDrag();
     sessionId=data.session;
     if(typeof data.submitted==="boolean")boardAlreadySubmitted=data.submitted;
-    try { localStorage.setItem(sessionStoreKey(),sessionId); }catch(_){}
+    try { localStorage.setItem(sessionStoreKey(),sessionId);if(sharesCooldown())localStorage.setItem(cooldownSessionKey,sessionId); }catch(_){}
     score=data.score;answered=data.answered;lives=data.lives;
     scoreEl.textContent=String(score);setHigh();
     revealStage=data.stage||1;
@@ -1394,6 +1506,7 @@
   }
   function resetGame(focusAfterReplay=false) {
     focusInputAfterReplay=focusAfterReplay;
+    closeMemePicker();cancelStandaloneMemeDrag();
     closeCommunityleResult();
     closeDailyResult();
     communityleShowResult.hidden=true;
@@ -1443,7 +1556,9 @@
     hasBooted=true;
     let resume=null;
     if(useResume)try{resume=localStorage.getItem(sessionStoreKey());}catch(_){}
-    loadServerRound("start",{settings:gameSettings(),resume});
+    let previousSession=null;
+    if(sharesCooldown())try{previousSession=localStorage.getItem(cooldownSessionKey)||localStorage.getItem(sessionStoreKey());}catch(_){}
+    loadServerRound("start",{settings:gameSettings(),resume,previousSession});
   }
   function createRound() {
     if(gameOver||remoteBusy)return;
@@ -1553,13 +1668,18 @@
       });
       return;
     }
+    paintFrame(frame,imageBox);
+    updateProgress();
+  }
+  function paintFrame(frame,target,copy=false){
+    const putImage=()=>target.replaceChildren(copy?frame.img.cloneNode(true):frame.img);
     if (showUnmodifiedAnswer) {
       // Show the real source image in the current viewer, never a recap copy.
       // This bypasses all temporary pixelation, hue changes and transforms.
       frame.img.style.filter = "";
       frame.img.style.transform = "";
       frame.img.style.imageRendering = "auto";
-      imageBox.replaceChildren(frame.img);
+      putImage();
     } else if (distortedEnabled() && !revealEnabled()) {
       try {
         const canvas = document.createElement("canvas");
@@ -1576,10 +1696,10 @@
         canvas.style.transform = frame.img.style.transform;
         canvas.setAttribute("role", "img");
         canvas.setAttribute("aria-label", "Distorted pixelated Community screenshot");
-        imageBox.replaceChildren(canvas);
+        target.replaceChildren(canvas);
       } catch (_) {
         frame.img.style.imageRendering = "pixelated";
-        imageBox.replaceChildren(frame.img);
+        putImage();
       }
     } else if (challenge === "communityle" && !communityleDone()) {
       // Blur/pixelation grows clearer with each guess, but original colours
@@ -1601,10 +1721,10 @@
         canvas.style.filter = "blur(" + blurs[stage] + "px)";
         canvas.setAttribute("role", "img");
         canvas.setAttribute("aria-label", "Daily Communityle distorted screenshot, attempt " + (stage+1));
-        imageBox.replaceChildren(canvas);
+        target.replaceChildren(canvas);
       } catch (_) {
         frame.img.style.filter = "blur(" + blurs[stage] + "px)";
-        imageBox.replaceChildren(frame.img);
+        putImage();
       }
     } else if (revealEnabled() && revealStage < 5) {
       // Canvas changes only the browser rendering, never the source WebP file.
@@ -1625,17 +1745,16 @@
         }
         canvas.setAttribute("role", "img");
         canvas.setAttribute("aria-label", "Pixelated Community screenshot");
-        imageBox.replaceChildren(canvas);
+        target.replaceChildren(canvas);
       } catch (_) {
         frame.img.style.filter = "blur(" + (27 - 5*revealStage) + "px)" + (distortedEnabled() ? " hue-rotate(90deg)" : "");
-        imageBox.replaceChildren(frame.img);
+        putImage();
       }
     } else {
       frame.img.style.filter = frame.img.style.filter || "";
       if (revealEnabled() && !distortedEnabled()) frame.img.style.filter = "";
-      imageBox.replaceChildren(frame.img);
+      putImage();
     }
-    updateProgress();
   }
   function moveFrame(direction) {
     // Allow reviewing all three screenshots even after a loss or while
@@ -1787,6 +1906,7 @@
     card.classList.remove("dragging");
     Array.from(timelineCards.children).forEach(el=>el.classList.remove("drag-over"));
     timelineDragging=null;
+    clearMemeDrop();
   }
   function updateTimelineEpisodeHint() {
     const available=gameFormat()==="episodeTimeline"&&!!currentRound
@@ -1844,6 +1964,7 @@
     card.style.transform="";
     timelineCards.querySelectorAll(".drag-over").forEach(node=>node.classList.remove("drag-over"));
     if(card.hasPointerCapture?.(pointerId))card.releasePointerCapture(pointerId);
+    clearMemeDrop();
   }
   function groupDropTarget(x,y,drag){
     const inside=r=>x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;
@@ -1883,7 +2004,7 @@
       if(index>=0)b.dataset.slot=String(index);
       if(token){const img=document.createElement("img");img.src=currentRound.timelineImages[token];img.alt="Community screenshot";img.draggable=false;b.appendChild(img);}
       else{b.textContent=pairs?"Drop image":["Beginning","Middle","End","End tag"][index%size];}
-      b.disabled=revealed;
+      if(revealed)b.setAttribute("aria-disabled","true");
       b.setAttribute("aria-label",token?"Select screenshot":("Place screenshot in group "+(Math.floor(index/size)+1)+", slot "+(index%size+1)));
       if(!revealed){
         b.draggable=false;
@@ -1913,6 +2034,7 @@
             if(!drag.active)return;
             b.classList.add("dragging");
             b.style.transform="translate3d("+dx+"px,"+dy+"px,0)";
+            highlightMemeDrop(ev.clientX,ev.clientY);
             const target=groupDropTarget(ev.clientX,ev.clientY,drag);
             timelineCards.querySelectorAll(".drag-over").forEach(node=>node.classList.remove("drag-over"));
             if(target&&target.node!==b)target.node.classList.add("drag-over");
@@ -1922,8 +2044,10 @@
             if(!drag||drag.card!==b||drag.pointerId!==ev.pointerId)return;
             ev.preventDefault();
             const target=groupDropTarget(ev.clientX,ev.clientY,drag),active=drag.active;
+            const memeHit=active&&memeDropHit(ev.clientX,ev.clientY);
             const fromRects=active?groupCardRects():null;
             clearGroupDrag();
+            if(memeHit){importMemeFrame(b.querySelector("img"));return;}
             if(!timelineCanReorder())return;
             if(!active){select();return;}
             if(target&&Number.isInteger(target.index)&&target.index!==index)place(token,target.index,fromRects);
@@ -2013,6 +2137,7 @@
         card.classList.add("dragging");
         // Unlike the old implementation, the real card follows the pointer.
         card.style.transform="translate3d("+dx+"px,"+dy+"px,0)";
+        highlightMemeDrop(event.clientX,event.clientY);
         const index=drag.rects.findIndex(r=>
           event.clientX>=r.left&&event.clientX<=r.right&&
           event.clientY>=r.top&&event.clientY<=r.bottom);
@@ -2024,6 +2149,9 @@
         if(!drag||drag.card!==card||drag.pointerId!==event.pointerId)return;
         event.preventDefault();
         const active=drag.active;
+        if(active&&memeDropHit(event.clientX,event.clientY)){
+          cancelTimelineDrag(card);importMemeFrame(img);return;
+        }
         const from=timelineOrder.indexOf(id);
         const position=drag.rects.findIndex(r=>
           event.clientX>=r.left&&event.clientX<=r.right&&
