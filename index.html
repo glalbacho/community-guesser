@@ -15,9 +15,9 @@
     <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Open challenges" aria-controls="challenge-menu" aria-expanded="false"><span aria-hidden="true">☰</span></button>
     <div class="menu-backdrop" id="menu-backdrop" hidden></div>
     <aside class="challenge-menu" id="challenge-menu" aria-label="Challenges" aria-hidden="true">
-      <div class="menu-head"><div><span class="menu-eyebrow">COMMUNITY GUESSER</span><h2>Challenges</h2></div><button type="button" id="menu-close" class="menu-close" aria-label="Close menu">×</button></div>
-      <p class="menu-intro">Choose how you want to play.</p>
-      <nav class="challenge-list" aria-label="Choose a challenge">
+      <div class="menu-head"><div><span class="menu-eyebrow">COMMUNITY GUESSER</span><h2 id="challenge-menu-title">Challenges</h2></div><button type="button" id="menu-close" class="menu-close" aria-label="Close menu">×</button></div>
+      <p class="menu-intro" id="challenge-menu-intro">Choose how you want to play.</p>
+      <nav id="challenge-main-list" class="challenge-list" aria-label="Choose a challenge">
         <button type="button" data-challenge="classic" class="challenge-link active"><span>Classic game</span><small>Easy · Normal · Hard · Impossible</small></button>
         <button type="button" data-challenge="daily" class="challenge-link"><span>Daily Challenge</span><small>Five shared screenshots · resets daily</small></button>
         <button type="button" data-challenge="communityle" class="challenge-link"><span>Communityle</span><small>Daily episode · 6 guesses · reveal the image</small></button>
@@ -25,15 +25,17 @@
         <button type="button" data-challenge="endTags" class="challenge-link"><span>End Tags</span><small>Guess the episode from its closing scene</small></button>
         <button type="button" data-challenge="four" class="challenge-link"><span>Four Choices</span><small>Pick the episode out of four</small></button>
         <button type="button" data-challenge="endTagPairs" class="challenge-link"><span>End Tag Match</span><small>Match four scenes to their end tags</small></button>
-        <details class="timeline-menu"><summary class="challenge-link"><span>Timeline Games</span><small>Choose a timeline challenge</small></summary>
-          <button type="button" data-challenge="timeline" class="challenge-link"><span>Timeline Challenge</span><small>Put three episodes in broadcast order</small></button>
-          <button type="button" data-challenge="episodeTimeline" class="challenge-link"><span>Episode Timeline</span><small>Three scenes from one episode · beginning, middle, end</small></button>
-          <button type="button" data-challenge="episodeGroups" class="challenge-link"><span>Mixed Episode Timeline</span><small>Group and order twelve scenes from three episodes</small></button>
-        </details>
+        <button type="button" id="open-timeline-menu" class="challenge-link" aria-controls="timeline-menu-list"><span>Timeline Games</span><small>Choose a timeline challenge</small></button>
         <button type="button" data-challenge="progressive" class="challenge-link"><span>Progressive Reveal</span><small>Sharpen the picture · fewer hints, more points</small></button>
         <button type="button" data-challenge="noEndTags" class="challenge-link"><span>No End Tags</span><small>Guess the episode from main scenes only</small></button>
         <div class="challenge-divider" role="separator"><span>MAKE IT YOUR OWN</span><small>Or build a game with your own rules.</small></div>
         <button type="button" data-challenge="custom" class="challenge-link custom-menu-link"><span>+ Custom Game</span><small>Choose seasons and 1–10 lives</small></button>
+      </nav>
+      <nav id="timeline-menu-list" class="challenge-list" aria-label="Choose a timeline game" hidden>
+        <button type="button" id="timeline-menu-back" class="challenge-link timeline-menu-back"><span>← Back to Challenges</span></button>
+          <button type="button" data-challenge="timeline" class="challenge-link"><span>Timeline Challenge</span><small>Put three episodes in broadcast order</small></button>
+          <button type="button" data-challenge="episodeTimeline" class="challenge-link"><span>Episode Timeline</span><small>Three scenes from one episode · beginning, middle, end</small></button>
+          <button type="button" data-challenge="episodeGroups" class="challenge-link"><span>Mixed Episode Timeline</span><small>Group and order twelve scenes from three episodes</small></button>
       </nav>
       <button type="button" id="show-all-highscores" class="sidebar-options highscores-nav">🏆 &nbsp; All High Scores</button>
       <button type="button" id="open-meme" class="sidebar-options" aria-controls="meme-view">✦ &nbsp; Make it a Meme</button>

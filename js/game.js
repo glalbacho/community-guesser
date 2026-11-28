@@ -920,7 +920,22 @@
   }
 
 
+  const mainChallengeList=$("challenge-main-list"),timelineMenuList=$("timeline-menu-list");
+  const timelineMenuOpen=$("open-timeline-menu"),timelineMenuBack=$("timeline-menu-back");
+  function showTimelineMenu(show,focus=true){
+    if(!mainChallengeList||!timelineMenuList)return;
+    mainChallengeList.hidden=show;
+    timelineMenuList.hidden=!show;
+    menu.classList.toggle("timeline-submenu",show);
+    $("challenge-menu-title").textContent=show?"Timeline Games":"Challenges";
+    $("challenge-menu-intro").textContent=show?"Choose a timeline challenge.":"Choose how you want to play.";
+    if(focus)(show?timelineMenuBack:timelineMenuOpen)?.focus();
+    if(typeof menu.scrollTo==="function")menu.scrollTo(0,0);
+  }
+  timelineMenuOpen?.addEventListener("click",()=>showTimelineMenu(true));
+  timelineMenuBack?.addEventListener("click",()=>showTimelineMenu(false));
   function openMenu(open) {
+    if(open)showTimelineMenu(false,false);
     menu.classList.toggle("open", open);
     menu.setAttribute("aria-hidden", String(!open));
     menuToggle.setAttribute("aria-expanded", String(open));
@@ -932,7 +947,10 @@
   menuClose.addEventListener("click", () => openMenu(false));
   menuBackdrop.addEventListener("click", () => openMenu(false));
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && menu.classList.contains("open")) openMenu(false);
+    if (event.key === "Escape" && menu.classList.contains("open")) {
+      if(timelineMenuList&&!timelineMenuList.hidden)showTimelineMenu(false);
+      else openMenu(false);
+    }
   });
 
   // The reveal uses fresh, unmodified source URLs, never the filtered
@@ -1278,9 +1296,10 @@
     feedback.classList.remove("is-wrong","is-correct");
   }
   function menuPickerMark() {
+    timelineMenuOpen?.classList.toggle("active",["timeline","episodeTimeline","episodeGroups"].includes(challenge));
     challengeLinks.forEach(b => {
       const active = b.getAttribute("data-challenge") === challenge;
-      if(active){const details=b.closest?.("details");if(details)details.open=true;}
+
       b.classList.toggle("active", active);
       b.setAttribute("aria-current", active ? "page" : "false");
     });
@@ -1385,6 +1404,7 @@
     timelineSubmit.textContent="Check order";
     ++timelineRevealVersion;
     timelineDragging=null;
+    clearGroupDrag();
     timelineMotionAnimations.forEach(animation=>{
       if(animation && animation.cancel)animation.cancel();
     });
@@ -1800,59 +1820,127 @@
       if(version===epoch&&round===currentRound)timelineShowEpisode.disabled=false;
     }
   });
-  let groupSlots=[],groupPool=[],groupSelected=null;
+  let groupSlots=[],groupPool=[],groupSelected=null,groupDrag=null;
+  function groupCardRects(){
+    return new Map(Array.from(timelineCards.querySelectorAll(".group-card[data-token]")).map(node=>[node.dataset.token,node.getBoundingClientRect()]));
+  }
+  function animateGrouping(fromRects){
+    const duration=timelineAnimationDuration();
+    if(!fromRects||!duration)return;
+    timelineCards.querySelectorAll(".group-card[data-token]").forEach(node=>{
+      const before=fromRects.get(node.dataset.token);
+      if(!before||!node.animate)return;
+      const after=node.getBoundingClientRect(),dx=before.left-after.left,dy=before.top-after.top;
+      if(Math.abs(dx)+Math.abs(dy)<2)return;
+      node.animate([{transform:"translate3d("+dx+"px,"+dy+"px,0)"},{transform:"translate3d(0,0,0)"}],
+        {duration,easing:"cubic-bezier(.22,.72,.32,1)"});
+    });
+  }
+  function clearGroupDrag(){
+    if(!groupDrag)return;
+    const {card,pointerId}=groupDrag;
+    groupDrag=null;
+    card.classList.remove("dragging");
+    card.style.transform="";
+    timelineCards.querySelectorAll(".drag-over").forEach(node=>node.classList.remove("drag-over"));
+    if(card.hasPointerCapture?.(pointerId))card.releasePointerCapture(pointerId);
+  }
+  function groupDropTarget(x,y,drag){
+    const inside=r=>x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;
+    return drag.targets.find(target=>inside(target.rect))||
+      (drag.pool&&inside(drag.pool.rect)?drag.pool:null);
+  }
   function renderGrouping(revealed=false,correct=false,preserve=false){
     const pairs=gameFormat()==="endTagPairs",size=pairs?2:4,count=pairs?4:3;
     if(!revealed&&!preserve){groupSlots=Array(size*count).fill(null);groupPool=timelineOrder.slice();groupSelected=null;timelineRevealed=false;}
+    clearGroupDrag();
     timelineCards.replaceChildren();
     timelineEpisodeHint.hidden=true;
     timelineInstruction.textContent=revealed?(correct?"Correct groups!":"Correct solution:"):
-      pairs?"Match each episode screenshot to its end tag. Select a picture, then a group slot.":"Group the scenes by episode and order each group: beginning, middle, end, end tag.";
+      pairs?"Drag each episode screenshot and its end tag into the same group.":"Drag scenes into three groups and order them: beginning, middle, end, end tag.";
     timelineBoard.classList.toggle("solved",revealed&&correct);
     timelineBoard.classList.toggle("incorrect",revealed&&!correct);
     timelineSubmit.hidden=false;
     timelineSubmit.disabled=!revealed&&groupSlots.some(x=>!x);
     timelineSubmit.textContent=revealed?(gameOver?"Play again":"Next round →"):"Check groups";
-    const place=(token,index)=>{
+    const place=(token,index,fromRects=null)=>{
       if(revealed||remoteBusy||!timelineCanReorder()||!token)return;
       const from=groupSlots.indexOf(token),old=groupSlots[index];
       if(from===index)return;
       if(from>=0)groupSlots[from]=old;
       else{groupPool=groupPool.filter(id=>id!==token);if(old)groupPool.push(old);}
-      groupSlots[index]=token;groupSelected=null;renderGrouping(false,false,true);
+      groupSlots[index]=token;groupSelected=null;renderGrouping(false,false,true);animateGrouping(fromRects);
     };
-    const unplace=token=>{
+    const unplace=(token,fromRects=null)=>{
       const from=groupSlots.indexOf(token);
       if(from>=0){groupSlots[from]=null;groupPool.push(token);}
-      groupSelected=null;renderGrouping(false,false,true);
+      groupSelected=null;renderGrouping(false,false,true);animateGrouping(fromRects);
     };
     const card=(token,index=-1)=>{
       const b=document.createElement("button");b.type="button";b.className="group-card";
       b.classList.toggle("selected",!!token&&groupSelected===token);
+      if(token)b.dataset.token=token;
+      if(index>=0)b.dataset.slot=String(index);
       if(token){const img=document.createElement("img");img.src=currentRound.timelineImages[token];img.alt="Community screenshot";img.draggable=false;b.appendChild(img);}
       else{b.textContent=pairs?"Drop image":["Beginning","Middle","End","End tag"][index%size];}
       b.disabled=revealed;
       b.setAttribute("aria-label",token?"Select screenshot":("Place screenshot in group "+(Math.floor(index/size)+1)+", slot "+(index%size+1)));
       if(!revealed){
-        b.draggable=!!token;
-        b.addEventListener("dragstart",ev=>{if(token)ev.dataTransfer.setData("text/plain",token);});
-        if(index>=0){
-          b.addEventListener("dragover",ev=>ev.preventDefault());
-          b.addEventListener("drop",ev=>{ev.preventDefault();const id=ev.dataTransfer.getData("text/plain");if(timelineOrder.includes(id))place(id,index);});
-        }
-        b.addEventListener("click",()=>{
+        b.draggable=false;
+        b.addEventListener("dragstart",ev=>ev.preventDefault());
+        const select=()=>{
           if(remoteBusy||timelineRevealed)return;
           if(index>=0&&groupSelected&&groupSelected!==token){place(groupSelected,index);return;}
           if(token){if(groupSelected===token&&index>=0){unplace(token);return;}groupSelected=groupSelected===token?null:token;renderGrouping(false,false,true);}
-        });
+        };
+        // Pointer capture keeps the real card under the finger/mouse.
+        if(token){
+          b.addEventListener("pointerdown",ev=>{
+            if(!timelineCanReorder()||ev.button!==0||groupDrag)return;
+            ev.preventDefault();
+            const targets=Array.from(timelineCards.querySelectorAll("[data-slot]")).map(node=>({node,index:Number(node.dataset.slot),rect:node.getBoundingClientRect()}));
+            const pool=timelineCards.querySelector(".group-pool");
+            groupDrag={card:b,token,pointerId:ev.pointerId,startX:ev.clientX,startY:ev.clientY,active:false,targets,
+              pool:pool?{node:pool,rect:pool.getBoundingClientRect()}:null};
+            b.setPointerCapture?.(ev.pointerId);
+          });
+          b.addEventListener("pointermove",ev=>{
+            const drag=groupDrag;
+            if(!drag||drag.card!==b||drag.pointerId!==ev.pointerId||!timelineCanReorder())return;
+            ev.preventDefault();
+            const dx=ev.clientX-drag.startX,dy=ev.clientY-drag.startY;
+            if(Math.hypot(dx,dy)>5)drag.active=true;
+            if(!drag.active)return;
+            b.classList.add("dragging");
+            b.style.transform="translate3d("+dx+"px,"+dy+"px,0)";
+            const target=groupDropTarget(ev.clientX,ev.clientY,drag);
+            timelineCards.querySelectorAll(".drag-over").forEach(node=>node.classList.remove("drag-over"));
+            if(target&&target.node!==b)target.node.classList.add("drag-over");
+          });
+          b.addEventListener("pointerup",ev=>{
+            const drag=groupDrag;
+            if(!drag||drag.card!==b||drag.pointerId!==ev.pointerId)return;
+            ev.preventDefault();
+            const target=groupDropTarget(ev.clientX,ev.clientY,drag),active=drag.active;
+            const fromRects=active?groupCardRects():null;
+            clearGroupDrag();
+            if(!timelineCanReorder())return;
+            if(!active){select();return;}
+            if(target&&Number.isInteger(target.index)&&target.index!==index)place(token,target.index,fromRects);
+            else if(target&&target===drag.pool&&index>=0)unplace(token,fromRects);
+            else animateGrouping(fromRects);
+          });
+          b.addEventListener("pointercancel",()=>{if(groupDrag?.card===b)clearGroupDrag();});
+          b.addEventListener("lostpointercapture",()=>{if(groupDrag?.card===b)clearGroupDrag();});
+        }
+        // Empty slots accept a tap; keyboard activation also works for cards.
+        b.addEventListener("click",ev=>{if(!token||ev.detail===0)select();});
       }
       return b;
     };
     if(!revealed){
       const pool=document.createElement("div");pool.className="group-pool";
       pool.setAttribute("aria-label","Unassigned screenshots");
-      pool.addEventListener("dragover",ev=>ev.preventDefault());
-      pool.addEventListener("drop",ev=>{ev.preventDefault();if(!remoteBusy&&groupSlots.includes(ev.dataTransfer.getData("text/plain")))unplace(ev.dataTransfer.getData("text/plain"));});
       groupPool.forEach(id=>pool.appendChild(card(id)));
       timelineCards.appendChild(pool);
     }
@@ -1869,6 +1957,7 @@
     timelineCards.appendChild(groups);
   }
   function renderTimeline() {
+    clearGroupDrag();
     timelineBoard.classList.toggle("grouping-board",isGrouping());
     if(isGrouping()){renderGrouping();return;}
     timelineCards.replaceChildren();

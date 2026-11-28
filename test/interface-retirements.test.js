@@ -71,3 +71,21 @@ test("Communityle branding has no hyphen while the existing game route and IDs s
   assert.match(game,/Play today's Communityle:/);
   assert.match(game,/#\/communityle/);
 });
+
+test("Timeline menu is a separate navigation panel, not an expandable list",()=>{
+  assert.match(html,/id="open-timeline-menu"/);
+  assert.match(html,/id="timeline-menu-list"[^>]*hidden/);
+  assert.match(html,/id="timeline-menu-back"/);
+  assert.doesNotMatch(html,/<details class="timeline-menu"/);
+  assert.match(game,/mainChallengeList\.hidden=show/);
+  assert.match(game,/timelineMenuList\.hidden=!show/);
+});
+test("Grouping uses real pointer-driven card movement and captured drop targets",()=>{
+  const grouping=game.slice(game.indexOf("function renderGrouping"),game.indexOf("function renderTimeline"));
+  assert.match(grouping,/setPointerCapture/);
+  assert.match(grouping,/pointermove/);
+  assert.match(grouping,/translate3d/);
+  assert.match(grouping,/pointerup/);
+  assert.match(grouping,/groupDropTarget/);
+  assert.doesNotMatch(grouping,/dataTransfer/);
+});
